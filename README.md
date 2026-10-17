@@ -36,6 +36,14 @@ CYPHER-X is a modern, macOS / iOS Sonoma-inspired desktop operations hub and wid
 - **Power-cut logging**: plug the laptop charger into a socket that is *not* on the inverter and tick "Detect power cuts". When the charger loses power CypherX logs an outage, notifies you and switches the power source to the inverter; hours without grid are totalled per day and week.
 - All entries are in the Energy log (with delete for typos) and stored in `smart_home_energy.json`, separate from the 3D layout.
 
+## CCTV
+
+- Live camera wall in the **CCTV** page: the PC webcam / USB cameras, or network CCTV cameras via their RTSP or HTTP stream URL (e.g. `rtsp://admin:password@192.168.1.50:554/stream1`). Double-click a feed to watch it alone.
+- Motion detection per camera with a 1–10 sensitivity; every motion event saves a snapshot and appears in the event list (double-click to open).
+- **Arm** to get a Windows notification on motion. Manual snapshots, manual recording and optional record-on-motion (local cameras), saved as MP4.
+- Cameras only turn on when you press Start, or at launch when "Start with CypherX" is ticked. Snapshots and clips older than the retention period (default 14 days) are deleted automatically. Files are under `%LOCALAPPDATA%\CyberOps\cctv`.
+- Needs QtMultimedia, which comes with the full `PySide6` package (not `PySide6-Essentials`).
+
 ## App-wide Experience
 
 - Every tool page sits on a blurred, darkened copy of the current Home wallpaper (liquid-glass look); darkness is adjustable in Settings.
