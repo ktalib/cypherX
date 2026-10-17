@@ -7,24 +7,32 @@ the room photos, with a power dashboard for the home power system.
   • battery runtime at the current load, daily kWh and cost at your tariff
   • add appliances, edit watts / hours-per-day, remove them
   • the layout lives in smart_home.json — new rooms can be added there
+  • prepaid meter tracker: tokens + meter readings give the real burn rate,
+    units left, days until the meter runs out and the real price per kWh
+  • battery readings typed in from the inverter / charge controller display
+  • power cuts detected through the laptop charger (grid-only socket)
 
 Switching is recorded in the operation history. Device states are set by hand
 for now; real smart plugs / meters can drive the same model later.
 """
 import os
+import time
+from datetime import datetime
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QScrollArea,
     QComboBox, QSpinBox, QDoubleSpinBox, QInputDialog, QGridLayout, QProgressBar,
-    QMessageBox, QButtonGroup
+    QMessageBox, QButtonGroup, QCheckBox, QDialog, QFormLayout, QDialogButtonBox,
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 )
 
 from app.icons import get_icon
 from app.database import Database
 from app.home3d.model import HomeModel, HOME_FILE
 from app.home3d.view3d import House3DView
+from app.home3d.energy import EnergyLog, read_grid_from_charger
 from app.widgets.home.common import make_menu, hicon
 
 
@@ -49,13 +57,146 @@ def _fmt_hours(h):
     return f"{m // 60}h {m % 60:02d}m"
 
 
+def _ago(ts):
+    mins = int((time.time() - ts) / 60)
+    if mins < 1:
+        return "just now"
+    if mins < 60:
+        return f"{mins} min ago"
+    if mins < 48 * 60:
+        return f"{mins // 60} h ago"
+    return f"{mins // 1440} days ago"
+
+
+def _when(ts):
+    return datetime.fromtimestamp(ts).strftime("%a %d %b %H:%M")
+
+
+_SUB = "color:#94a3b8;font-size:11px;background:transparent;"
+_BIG = "color:#ffffff;font-size:26px;font-weight:300;background:transparent;"
+_INFO = "color:#e2e8f0;font-size:12px;font-weight:600;background:transparent;"
+
+GRID_POLL_MS = 10_000
+
+
+def ask_numbers(parent, title, note, fields):
+    """Small form dialog. fields: (label, value, lo, hi, decimals, prefix, suffix,
+    optional). An optional field left at its minimum (shown as "—") returns None.
+    Returns the list of values, or None when cancelled."""
+    dlg = QDialog(parent)
+    dlg.setWindowTitle(title)
+    form = QFormLayout(dlg)
+    if note:
+        n = QLabel(note)
+        n.setWordWrap(True)
+        n.setStyleSheet(_SUB)
+        form.addRow(n)
+    boxes = []
+    for label, value, lo, hi, dec, prefix, suffix, optional in fields:
+        sb = QDoubleSpinBox()
+        sb.setRange(lo, hi)
+        sb.setDecimals(dec)
+        sb.setPrefix(prefix)
+        sb.setSuffix(suffix)
+        if optional:
+            sb.setSpecialValueText("—  (not shown)")
+        sb.setValue(value)
+        form.addRow(label, sb)
+        boxes.append((sb, optional))
+    bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    bb.accepted.connect(dlg.accept)
+    bb.rejected.connect(dlg.reject)
+    form.addRow(bb)
+    if dlg.exec() != QDialog.Accepted:
+        return None
+    return [None if opt and sb.value() <= sb.minimum() else sb.value() for sb, opt in boxes]
+
+
+class EnergyHistoryDialog(QDialog):
+    """Every logged token, meter reading, battery reading and power cut, newest
+    first, with delete for typos."""
+
+    def __init__(self, energy, currency, parent=None):
+        super().__init__(parent)
+        self.energy = energy
+        self.currency = currency
+        self.setWindowTitle("Energy log")
+        self.resize(560, 460)
+        lo = QVBoxLayout(self)
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["When", "Entry", "Value"])
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        lo.addWidget(self.table)
+        row = QHBoxLayout()
+        delete = QPushButton(" Delete selected")
+        delete.setIcon(get_icon("trash", "#f87171", 13))
+        delete.clicked.connect(self._delete)
+        close = QPushButton("Close")
+        close.clicked.connect(self.accept)
+        row.addWidget(delete)
+        row.addStretch()
+        row.addWidget(close)
+        lo.addLayout(row)
+        self._fill()
+
+    def _rows(self):
+        e, cur = self.energy, self.currency
+        rows = []
+        for t in e.tokens:
+            rows.append((t["ts"], "tokens", t, "Token bought",
+                         f"{cur}{t['amount']:,.0f}  →  {t['units']:g} kWh"))
+        for r in e.readings:
+            rows.append((r["ts"], "readings", r, "Meter reading", f"{r['units']:g} kWh left"))
+        for b in e.battery:
+            parts = []
+            if "pct" in b:
+                parts.append(f"{b['pct']:g} %")
+            if "volts" in b:
+                parts.append(f"{b['volts']:g} V")
+            rows.append((b["ts"], "battery", b, "Battery reading", "  ·  ".join(parts)))
+        for o in e.outages:
+            end = o.get("end")
+            dur = _fmt_hours(((end or time.time()) - o["start"]) / 3600.0)
+            rows.append((o["start"], "outages", o, "Power cut",
+                         f"{dur}" + ("" if end else "  (still off)")))
+        return sorted(rows, key=lambda r: r[0], reverse=True)
+
+    def _fill(self):
+        self.rows = self._rows()
+        self.table.setRowCount(len(self.rows))
+        for i, (ts, _, _, kind, value) in enumerate(self.rows):
+            for c, text in enumerate((_when(ts), kind, value)):
+                self.table.setItem(i, c, QTableWidgetItem(text))
+        self.table.resizeColumnsToContents()
+
+    def _delete(self):
+        picked = sorted({i.row() for i in self.table.selectedIndexes()}, reverse=True)
+        if not picked:
+            return
+        if QMessageBox.question(self, "Delete entries", f"Delete {len(picked)} entr"
+                                f"{'y' if len(picked) == 1 else 'ies'}?") != QMessageBox.Yes:
+            return
+        for i in picked:
+            _, kind, entry, _, _ = self.rows[i]
+            self.energy.remove(kind, entry)
+        self._fill()
+
+
 class SmartHomeView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.model = HomeModel()
+        self.energy = EnergyLog()
         self.db = Database.get_instance()
         self._setup_ui()
         self.refresh()
+        self.grid_timer = QTimer(self)
+        self.grid_timer.timeout.connect(self._poll_grid)
+        self.grid_timer.start(GRID_POLL_MS)
+        QTimer.singleShot(0, self._poll_grid)
 
     # ------------------------------------------------------------------ UI --
 
@@ -193,6 +334,8 @@ class SmartHomeView(QWidget):
         self.tariff.valueChanged.connect(self._power_changed)
         sl.addWidget(card)
 
+        self._build_energy_cards(sl)
+
         card, lo = _card("ROOMS")
         self.rooms_box = QVBoxLayout()
         self.rooms_box.setSpacing(6)
@@ -224,6 +367,76 @@ class SmartHomeView(QWidget):
         scroll.setWidget(side)
         body.addWidget(scroll)
         main.addLayout(body, 1)
+
+    def _build_energy_cards(self, sl):
+        card, lo = _card("PREPAID METER")
+        self.meter_big = QLabel()
+        self.meter_big.setStyleSheet(_BIG)
+        lo.addWidget(self.meter_big)
+        self.meter_info = QLabel()
+        self.meter_info.setWordWrap(True)
+        self.meter_info.setStyleSheet(_INFO)
+        lo.addWidget(self.meter_info)
+        self.meter_sub = QLabel()
+        self.meter_sub.setWordWrap(True)
+        self.meter_sub.setStyleSheet(_SUB)
+        lo.addWidget(self.meter_sub)
+        self.use_price_btn = QPushButton()
+        self.use_price_btn.setToolTip("Set the tariff above to the average price you paid for tokens")
+        self.use_price_btn.clicked.connect(self._use_paid_price)
+        lo.addWidget(self.use_price_btn)
+        row = QHBoxLayout()
+        token = QPushButton(" Bought token")
+        token.setIcon(get_icon("plus", "#e2e8f0", 13))
+        token.clicked.connect(self._log_token)
+        reading = QPushButton(" Meter reading")
+        reading.setIcon(get_icon("zap", "#e2e8f0", 13))
+        reading.setToolTip("Type in the units left shown on the meter's display")
+        reading.clicked.connect(self._log_reading)
+        row.addWidget(token)
+        row.addWidget(reading)
+        lo.addLayout(row)
+        sl.addWidget(card)
+
+        card, lo = _card("BATTERY READINGS")
+        self.bat_big = QLabel()
+        self.bat_big.setStyleSheet(_BIG)
+        lo.addWidget(self.bat_big)
+        self.bat_sub = QLabel()
+        self.bat_sub.setWordWrap(True)
+        self.bat_sub.setStyleSheet(_SUB)
+        lo.addWidget(self.bat_sub)
+        log_bat = QPushButton(" Log reading")
+        log_bat.setIcon(get_icon("battery", "#e2e8f0", 13))
+        log_bat.setToolTip("Type in what the inverter or charge controller display shows")
+        log_bat.clicked.connect(self._log_battery)
+        lo.addWidget(log_bat)
+        sl.addWidget(card)
+
+        card, lo = _card("GRID SUPPLY")
+        self.grid_big = QLabel()
+        self.grid_big.setStyleSheet(_BIG)
+        lo.addWidget(self.grid_big)
+        self.grid_info = QLabel()
+        self.grid_info.setWordWrap(True)
+        self.grid_info.setStyleSheet(_INFO)
+        lo.addWidget(self.grid_info)
+        self.grid_detect = QCheckBox("Detect power cuts with this laptop's charger")
+        self.grid_detect.setToolTip("Plug the laptop charger into a socket that is NOT on the inverter. "
+                                    "When the charger loses power, CypherX logs a power cut.")
+        self.grid_detect.setChecked(self.energy.grid_detect)
+        self.grid_detect.toggled.connect(self._grid_detect_toggled)
+        lo.addWidget(self.grid_detect)
+        self.grid_sub = QLabel()
+        self.grid_sub.setWordWrap(True)
+        self.grid_sub.setStyleSheet(_SUB)
+        lo.addWidget(self.grid_sub)
+        hist = QPushButton(" Energy log")
+        hist.setIcon(get_icon("history", "#e2e8f0", 13))
+        hist.setToolTip("All tokens, meter readings, battery readings and power cuts")
+        hist.clicked.connect(self._show_history)
+        lo.addWidget(hist)
+        sl.addWidget(card)
 
     # ------------------------------------------------------------- refresh --
 
@@ -306,7 +519,84 @@ class SmartHomeView(QWidget):
             row.addWidget(name, 1)
             row.addWidget(watts)
             self.dev_box.addLayout(row)
+        self.refresh_energy()
         self.view.invalidate()
+
+    def refresh_energy(self):
+        e = self.energy
+        cur = self.model.power.get("currency", "₦")
+
+        # ---- prepaid meter
+        left, rate, days = e.units_left(), e.burn_rate(), e.days_left()
+        price = e.price_per_kwh()
+        last = e.last_reading()
+        if left is None:
+            self.meter_big.setText("— kWh")
+            self.meter_info.setText("Type in the units left on the meter to start tracking.")
+        else:
+            self.meter_big.setText(f"{left:,.1f} kWh left")
+            if rate:
+                cost = f"  ·  {cur}{rate * price:,.0f} / day" if price else ""
+                warn = "  — buy soon" if days is not None and days < 2 else ""
+                self.meter_info.setText(f"≈ {_fmt_hours(days * 24)} left at "
+                                        f"{rate:.1f} kWh / day{cost}{warn}")
+                self.meter_info.setStyleSheet(_INFO.replace("#e2e8f0", "#ffb547") if warn else _INFO)
+            else:
+                self.meter_info.setText("Log another reading later (6 h+) to get your daily usage.")
+                self.meter_info.setStyleSheet(_INFO)
+        bits = []
+        if last:
+            bits.append(f"Last reading {_ago(last['ts'])} ({last['units']:g} kWh)")
+        if price:
+            bits.append(f"you pay {cur}{price:,.1f} / kWh on average")
+        self.meter_sub.setText("  ·  ".join(bits))
+        tariff = self.model.power.get("tariff", 0)
+        show = bool(price) and abs(price - tariff) >= 0.5
+        self.use_price_btn.setVisible(show)
+        if show:
+            self.use_price_btn.setText(f"Use {cur}{price:,.1f} / kWh as tariff")
+
+        # ---- battery
+        b = e.last_battery()
+        if b is None:
+            self.bat_big.setText("—")
+            self.bat_sub.setText("Log what the inverter / charge controller shows; the charge % "
+                                 "also updates the runtime estimate.")
+        else:
+            parts = []
+            if "pct" in b:
+                parts.append(f"{b['pct']:g} %")
+            if "volts" in b:
+                parts.append(f"{b['volts']:g} V")
+            self.bat_big.setText("  ·  ".join(parts))
+            self.bat_sub.setText(f"Read {_ago(b['ts'])}  ·  {_when(b['ts'])}")
+
+        # ---- grid
+        now = time.time()
+        out = e.open_outage()
+        if out:
+            self.grid_big.setText("Grid OFF")
+            self.grid_big.setStyleSheet(_BIG.replace("#ffffff", "#ff5d6c"))
+            self.grid_info.setText(f"Off for {_fmt_hours((now - out['start']) / 3600)}  "
+                                   f"(since {_when(out['start'])})")
+        elif e.grid_detect:
+            self.grid_big.setText("Grid ON")
+            self.grid_big.setStyleSheet(_BIG.replace("#ffffff", "#10b981"))
+            self.grid_info.setText("Watching the laptop charger.")
+        else:
+            self.grid_big.setText("Not watching")
+            self.grid_big.setStyleSheet(_BIG)
+            self.grid_info.setText("Tick the box below to log power cuts automatically.")
+        if e.grid_detect and read_grid_from_charger() is None:
+            self.grid_info.setText("This PC has no battery sensor, so it can't see the charger. "
+                                   "Power cuts can't be detected here.")
+        stats = [f"No grid: {_fmt_hours(e.outage_hours(now - 86400, now))} in 24 h, "
+                 f"{_fmt_hours(e.outage_hours(now - 7 * 86400, now))} in 7 days"]
+        done = [o for o in e.outages if o.get("end")]
+        if done:
+            o = done[-1]
+            stats.append(f"Last cut {_when(o['start'])}, {_fmt_hours((o['end'] - o['start']) / 3600)}")
+        self.grid_sub.setText("  ·  ".join(stats) if e.outages else "No power cuts logged yet.")
 
     @staticmethod
     def _clear(layout):
@@ -346,6 +636,106 @@ class SmartHomeView(QWidget):
         pw["battery_pct"] = self.pct.value()
         pw["tariff"] = self.tariff.value()
         self.model.save()
+        self.refresh()
+
+    # ------------------------------------------------------- energy log --
+
+    def _log(self, action):
+        try:
+            self.db.log_operation("Smart Home", action, "Success")
+        except Exception:
+            pass
+
+    def _notify(self, title, message):
+        win = self.window()
+        if hasattr(win, "notify"):
+            win.notify(title, message)
+
+    def _log_token(self):
+        cur = self.model.power.get("currency", "₦")
+        price = self.energy.price_per_kwh() or self.model.power.get("tariff", 225) or 1
+        vals = ask_numbers(self, "Bought token",
+                           "Log the token when you load it into the meter. The units are on the "
+                           "receipt / SMS.",
+                           [("Amount paid", 5000, 0, 10_000_000, 0, cur + " ", "", False),
+                            ("Units (kWh)", round(5000 / price, 1), 0.1, 100_000, 1, "", " kWh", False)])
+        if not vals:
+            return
+        amount, units = vals
+        self.energy.add_token(amount, units)
+        self._log(f"Prepaid token: {cur}{amount:,.0f} for {units:g} kWh")
+        self.refresh_energy()
+
+    def _log_reading(self):
+        left = self.energy.units_left()
+        vals = ask_numbers(self, "Meter reading",
+                           "Units left, as shown on the meter's display.",
+                           [("Units left", round(left, 1) if left is not None else 50,
+                             0, 100_000, 1, "", " kWh", False)])
+        if not vals:
+            return
+        self.energy.add_reading(vals[0])
+        self._log(f"Meter reading: {vals[0]:g} kWh left")
+        self.refresh_energy()
+
+    def _log_battery(self):
+        b = self.energy.last_battery() or {}
+        vals = ask_numbers(self, "Battery reading",
+                           "Fill in whatever the display shows; leave the other at —.",
+                           [("Charge", b.get("pct", self.model.power.get("battery_pct", 100)),
+                             0, 100, 0, "", " %", True),
+                            ("Battery voltage", b.get("volts", 0), 0, 100, 1, "", " V", True)])
+        if not vals or vals == [None, None]:
+            return
+        pct, volts = vals
+        self.energy.add_battery(pct=pct, volts=volts)
+        if pct is not None:
+            self.pct.setValue(int(round(pct)))     # saves and refreshes via _power_changed
+        self._log("Battery reading: " + "  ".join(
+            x for x in (f"{pct:g} %" if pct is not None else "",
+                        f"{volts:g} V" if volts is not None else "") if x))
+        self.refresh_energy()
+
+    def _use_paid_price(self):
+        price = self.energy.price_per_kwh()
+        if price:
+            self.tariff.setValue(round(price, 1))
+
+    def _show_history(self):
+        EnergyHistoryDialog(self.energy, self.model.power.get("currency", "₦"), self).exec()
+        self.refresh_energy()
+
+    def _grid_detect_toggled(self, on):
+        self.energy.grid_detect = on
+        if not on and self.energy.open_outage():
+            self.energy.grid_changed(True)       # stop counting an outage nobody watches
+        self._poll_grid()
+        self.refresh_energy()
+
+    def _poll_grid(self):
+        if not self.energy.grid_detect:
+            return
+        grid = read_grid_from_charger()
+        if grid is None:
+            return
+        change = self.energy.grid_changed(grid)
+        if change is None:
+            if self.energy.open_outage():
+                self.refresh_energy()            # keep the "off for …" timer moving
+            return
+        pw = self.model.power
+        if change == "off":
+            self._log("Power cut: grid went off (laptop charger lost power)")
+            self._notify("Power cut", "Grid is off — running on the inverter.")
+            if pw.get("source") == "Grid":
+                self.source.setCurrentText("Inverter (battery)")
+        else:
+            o = self.energy.outages[-1]
+            dur = _fmt_hours((o["end"] - o["start"]) / 3600)
+            self._log(f"Grid restored after {dur}")
+            self._notify("Grid restored", f"Power is back after {dur}.")
+            if pw.get("source") == "Inverter (battery)":
+                self.source.setCurrentText("Grid")
         self.refresh()
 
     def _device_menu(self, item_id):
