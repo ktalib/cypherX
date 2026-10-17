@@ -22,6 +22,7 @@ from app.views.widget_screen import WidgetScreenView
 from app.views.dashboard import DashboardView
 from app.views.smart_home import SmartHomeView
 from app.views.cctv import CctvView
+from app.views.smart_dashboard import SmartDashboardView
 from app.views.my_computer import MyComputerView
 from app.views.disk_analyzer import DiskAnalyzerView
 from app.views.disk_cleaner import DiskCleanerView
@@ -107,6 +108,7 @@ class MainWindow(QMainWindow):
 
         self.view_smart_home = SmartHomeView(self)
         self.view_cctv = CctvView(self)
+        self.view_smart_dashboard = SmartDashboardView(self.view_smart_home, self.view_cctv, self)
         self.view_dashboard = DashboardView(self)
         self.view_dashboard.navigate_to_module.connect(self.navigate_by_id)
 
@@ -131,6 +133,7 @@ class MainWindow(QMainWindow):
         # Map to stack in order of MODULE_DEFINITIONS
         self.view_map = {
             "widget_screen": self.view_widget_screen,
+            "smart_dashboard": self.view_smart_dashboard,
             "smart_home": self.view_smart_home,
             "cctv": self.view_cctv,
             "dashboard": self.view_dashboard,

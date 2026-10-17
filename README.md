@@ -36,6 +36,13 @@ CYPHER-X is a modern, macOS / iOS Sonoma-inspired desktop operations hub and wid
 - **Power-cut logging**: plug the laptop charger into a socket that is *not* on the inverter and tick "Detect power cuts". When the charger loses power CypherX logs an outage, notifies you and switches the power source to the inverter; hours without grid are totalled per day and week.
 - All entries are in the Energy log (with delete for typos) and stored in `smart_home_energy.json`, separate from the 3D layout.
 
+## Home Dashboard
+
+- One page for the whole smart home: a greeting with the home's status and quick actions (All off, Arm / Disarm, Bought token, 3D map).
+- Tiles for live load against the inverter, battery charge and runtime, prepaid meter days left, and energy cost (now vs a usual hour, per day and month).
+- Tap an appliance tile to switch it (same model as the 3D Smart Home page), load by room (click a room to fly the 3D map there), the last 24 h of grid supply with power cuts, meter units over two weeks, and a security card with the latest motion snapshot.
+- The layout adapts to the window width: four columns, two columns or one.
+
 ## CCTV
 
 - Live camera wall in the **CCTV** page: the PC webcam / USB cameras, or network CCTV cameras via their RTSP or HTTP stream URL (e.g. `rtsp://admin:password@192.168.1.50:554/stream1`). Double-click a feed to watch it alone.
