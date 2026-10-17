@@ -21,6 +21,7 @@ from app.services.network_service import NetworkService
 from app.views.widget_screen import WidgetScreenView
 from app.views.dashboard import DashboardView
 from app.views.smart_home import SmartHomeView
+from app.views.cctv import CctvView
 from app.views.my_computer import MyComputerView
 from app.views.disk_analyzer import DiskAnalyzerView
 from app.views.disk_cleaner import DiskCleanerView
@@ -105,6 +106,7 @@ class MainWindow(QMainWindow):
         self.view_widget_screen.navigate_to_module.connect(self.navigate_by_id)
 
         self.view_smart_home = SmartHomeView(self)
+        self.view_cctv = CctvView(self)
         self.view_dashboard = DashboardView(self)
         self.view_dashboard.navigate_to_module.connect(self.navigate_by_id)
 
@@ -130,6 +132,7 @@ class MainWindow(QMainWindow):
         self.view_map = {
             "widget_screen": self.view_widget_screen,
             "smart_home": self.view_smart_home,
+            "cctv": self.view_cctv,
             "dashboard": self.view_dashboard,
             "my_computer": self.view_my_computer,
             "disk_analyzer": self.view_disk_analyzer,

@@ -14,6 +14,7 @@ from app.icons import get_icon, get_pixmap
 MODULE_DEFINITIONS: List[Tuple[str, str, str, str]] = [
     ("widget_screen", "Widget Screen", "widgets", "Live liquid glass desktop & lock widgets"),
     ("smart_home", "Smart Home", "home", "3D home & power system"),
+    ("cctv", "CCTV", "video", "Security cameras & motion alerts"),
     ("dashboard", "Command Center", "dashboard", "Main operations telemetry hub"),
     ("my_computer", "My Computer", "computer", "System overview & hardware"),
     ("disk_analyzer", "Disk Analyzer", "pie_chart", "Storage breakdown & charts"),
