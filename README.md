@@ -28,6 +28,14 @@ CYPHER-X is a modern, macOS / iOS Sonoma-inspired desktop operations hub and wid
 
 ---
 
+## Smart Home & Power
+
+- 3D model of the flat with live load per room, inverter capacity, battery runtime and daily cost at your tariff. Click an appliance to switch it.
+- **Prepaid meter tracker**: log each token you buy and type in the meter's "units left" now and then. CypherX works out your real kWh per day, the units left now, how many days until the meter runs out, and the average price you pay per kWh.
+- **Battery readings**: log the charge % and / or voltage shown on the inverter or charge controller; the % updates the runtime estimate.
+- **Power-cut logging**: plug the laptop charger into a socket that is *not* on the inverter and tick "Detect power cuts". When the charger loses power CypherX logs an outage, notifies you and switches the power source to the inverter; hours without grid are totalled per day and week.
+- All entries are in the Energy log (with delete for typos) and stored in `smart_home_energy.json`, separate from the 3D layout.
+
 ## App-wide Experience
 
 - Every tool page sits on a blurred, darkened copy of the current Home wallpaper (liquid-glass look); darkness is adjustable in Settings.
