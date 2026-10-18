@@ -13,6 +13,7 @@ from app.icons import get_icon, get_pixmap
 # Tuple format: (module_id, display_label, icon_name, description)
 MODULE_DEFINITIONS: List[Tuple[str, str, str, str]] = [
     ("widget_screen", "Widget Screen", "widgets", "Live liquid glass desktop & lock widgets"),
+    ("smart_dashboard", "Home Dashboard", "activity", "Smart home at a glance"),
     ("smart_home", "Smart Home", "home", "3D home & power system"),
     ("cctv", "CCTV", "video", "Security cameras & motion alerts"),
     ("dashboard", "Command Center", "dashboard", "Main operations telemetry hub"),
