@@ -88,7 +88,8 @@ def polish_tables(root: QWidget):
             t.setSelectionBehavior(QAbstractItemView.SelectRows)
         hh = t.horizontalHeader()
         hh.setHighlightSections(False)
-        hh.setMinimumSectionSize(70)
+        if not t.property("compact_columns"):    # tables with icon-sized columns opt out
+            hh.setMinimumSectionSize(70)
         hh.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
     for sa in root.findChildren(QScrollArea):
         sa.viewport().setAutoFillBackground(False)

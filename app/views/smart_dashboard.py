@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer, QRectF, QPointF, Signal, QSize
-from PySide6.QtGui import QPainter, QColor, QPen, QFont, QPainterPath, QLinearGradient, QPixmap
+from PySide6.QtGui import QPainter, QColor, QPen, QFont, QFontMetrics, QPainterPath, QLinearGradient, QPixmap
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QFrame,
     QScrollArea, QSizePolicy, QToolTip
@@ -139,16 +139,21 @@ class Ring(QWidget):
 
 
 class RoomBars(QWidget):
-    """Horizontal bars: load per room (one hue, magnitude)."""
+    """Horizontal bars, one hue (magnitude). Defaults to load per room in watts;
+    fmt / share_of / click_hint make it reusable for other quantities."""
 
     room_clicked = Signal(str)
     ROW = 34
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, fmt=lambda v: f"{v:,.0f} W", share_of="the load",
+                 click_hint="Click to fly the 3D map there", name_w=96, val_w=64):
         super().__init__(parent)
-        self.rows = []          # (room_id, name, watts)
+        self.rows = []          # (key, name, value)
+        self.fmt, self.share_of, self.click_hint = fmt, share_of, click_hint
+        self.name_w, self.val_w = name_w, val_w
         self.setMouseTracking(True)
-        self.setCursor(Qt.PointingHandCursor)
+        if click_hint:
+            self.setCursor(Qt.PointingHandCursor)
 
     def set_rows(self, rows):
         self.rows = rows
@@ -164,12 +169,12 @@ class RoomBars(QWidget):
         if row:
             total = sum(r[2] for r in self.rows) or 1
             QToolTip.showText(e.globalPosition().toPoint(),
-                              f"{row[1]}: {row[2]:,.0f} W  ({row[2] / total * 100:.0f}% of the load)\n"
-                              "Click to fly the 3D map there", self)
+                              f"{row[1]}: {self.fmt(row[2])}  ({row[2] / total * 100:.0f}% of {self.share_of})"
+                              + (f"\n{self.click_hint}" if self.click_hint else ""), self)
 
     def mousePressEvent(self, e):
         row = self._row_at(e.position().y())
-        if row:
+        if row and self.click_hint:
             self.room_clicked.emit(row[0])
 
     def paintEvent(self, _):
@@ -178,7 +183,7 @@ class RoomBars(QWidget):
         f = QFont()
         f.setPixelSize(12)
         top = max([r[2] for r in self.rows] + [1])
-        name_w, val_w = 96, 64
+        name_w, val_w = self.name_w, self.val_w
         for i, (_, name, watts) in enumerate(self.rows):
             y = i * self.ROW
             f.setWeight(QFont.Medium)
@@ -197,7 +202,7 @@ class RoomBars(QWidget):
             p.setFont(f)
             p.setPen(QColor(TEXT if watts else DIM))
             p.drawText(QRectF(self.width() - val_w, y, val_w, self.ROW), Qt.AlignVCenter | Qt.AlignRight,
-                       f"{watts:,.0f} W")
+                       self.fmt(watts))
         p.end()
 
 
@@ -455,10 +460,38 @@ class ApplianceTile(QFrame):
         self.setToolTip(f"Switch {it['name']} {'off' if on else 'on'}")
 
 
+class FitLabel(QLabel):
+    """One-line label that shrinks its font (down to 13 px) to fit the width."""
+
+    def __init__(self, text="", color=TEXT, size=24, weight=300):
+        super().__init__(text)
+        self._color, self._size, self._weight = color, size, weight
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.setFixedHeight(int(size * 1.35))
+        self.setStyleSheet("background:transparent;border:none;")
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.TextAntialiasing)
+        f = QFont()
+        f.setWeight(QFont.Light if self._weight <= 300 else QFont.Normal)
+        size = self._size
+        while size > 13:
+            f.setPixelSize(size)
+            if QFontMetrics(f).horizontalAdvance(self.text()) <= self.width():
+                break
+            size -= 1
+        f.setPixelSize(size)
+        p.setFont(f)
+        p.setPen(QColor(self._color))
+        p.drawText(self.rect(), Qt.AlignLeft | Qt.AlignVCenter, self.text())
+        p.end()
+
+
 class StatTile(QFrame):
     """KPI tile: ring on the left, headline + detail on the right."""
 
-    def __init__(self, title, icon, parent=None):
+    def __init__(self, title, icon, parent=None, ring=True):
         super().__init__(parent)
         self.setObjectName("panel")
         lo = QVBoxLayout(self)
@@ -479,11 +512,12 @@ class StatTile(QFrame):
         body = QHBoxLayout()
         body.setSpacing(14)
         self.ring = Ring(84)
+        self.ring.setVisible(ring)
         body.addWidget(self.ring)
         col = QVBoxLayout()
         col.setSpacing(2)
         col.addStretch()
-        self.value = _lbl("", TEXT, 24, 300)
+        self.value = FitLabel("", TEXT, 24, 300)
         self.detail = _lbl("", SOFT, 11, 600)
         self.detail.setWordWrap(True)
         self.sub = _lbl("", MUTED, 10, 500)
