@@ -36,6 +36,28 @@ CYPHER-X is a modern, macOS / iOS Sonoma-inspired desktop operations hub and wid
 - **Power-cut logging**: plug the laptop charger into a socket that is *not* on the inverter and tick "Detect power cuts". When the charger loses power CypherX logs an outage, notifies you and switches the power source to the inverter; hours without grid are totalled per day and week.
 - All entries are in the Energy log (with delete for typos) and stored in `smart_home_energy.json`, separate from the 3D layout.
 
+## Sign-in, roles and the sidebar
+
+- CYPHER-X opens with a sign-in screen. First run: **admin / admin** with **root** access. Change it in **Settings → Accounts** (the app keeps reminding until you do). Passwords are stored as salted PBKDF2 hashes; five wrong tries lock the sign-in for 30 seconds.
+- **Lock** with the padlock at the bottom of the sidebar, **Ctrl+L**, or the tray menu. Any account can unlock; the app follows whoever signs in.
+- The sidebar has three collapsible groups:
+  - **Smart Home** — Home Dashboard, Smart Home (3D), CCTV, Widget Screen
+  - **Apps** — Notes & Tasks, Bills, Groceries, Clock & Calendar, App Launcher
+  - **Server** — the PC the smart home runs on: Command Center, My Computer, monitors, process / startup managers, disk and file tools, automation, operation history. Collapsed by default and **root only**.
+- Roles: **root** sees everything and manages users (add, reset password, remove — the last root can't be removed); **user** sees Smart Home and Apps.
+
+## Bills
+
+- Household bills with amount, frequency (monthly, weekly, quarterly, yearly, one-off), due day and category.
+- Tiles: monthly total (yearly / quarterly / weekly bills converted to a monthly amount), split per person, paid this period with what's still to pay this month, and the next bill due. Overdue bills are flagged red; due within 3 days in amber.
+- "Mark paid" applies to the current period, so a monthly bill is unpaid again next month. Monthly cost by category.
+
+## Groceries
+
+- Shopping lists with quantity × unit price, category, a budget (with % used and over-budget warning), and ticks for items in the basket.
+- Prices are remembered: type an item you've bought before and its last price is filled in. Copy a list to start next week's shop with the same items.
+- Spend by category; "Clear bought" removes ticked items.
+
 ## Home Dashboard
 
 - One page for the whole smart home: a greeting with the home's status and quick actions (All off, Arm / Disarm, Bought token, 3D map).

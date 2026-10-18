@@ -7,12 +7,13 @@ from PySide6.QtWidgets import (
     QStackedWidget, QMessageBox, QSystemTrayIcon, QMenu, QApplication
 )
 from app.icons import get_icon
+from app.database import Database
 from app.config import (
     APP_NAME, APP_SUBTITLE, APP_VERSION, DEFAULT_METRICS_INTERVAL_MS
 )
 from app.widgets.status_bar import TopStatusBar
 from app.widgets.right_panel import RightInfoPanel
-from app.navigation import NavigationSidebar, MODULE_DEFINITIONS
+from app.navigation import NavigationSidebar, MODULE_DEFINITIONS, MODULES, module_allowed
 from app.ui_polish import GlassBackdrop, polish_tables
 from app.views.settings import get_pref
 from app.services.system_service import SystemService
@@ -23,6 +24,9 @@ from app.views.dashboard import DashboardView
 from app.views.smart_home import SmartHomeView
 from app.views.cctv import CctvView
 from app.views.smart_dashboard import SmartDashboardView
+from app.views.bills import BillsView
+from app.views.groceries import GroceriesView
+from app.widgets.login_dialog import LoginDialog
 from app.views.my_computer import MyComputerView
 from app.views.disk_analyzer import DiskAnalyzerView
 from app.views.disk_cleaner import DiskCleanerView
@@ -44,8 +48,11 @@ from app.views.settings import SettingsView
 class MainWindow(QMainWindow):
     """Master CyberOps Command Center Window coordinating all views, navigation, and telemetry."""
 
-    def __init__(self):
+    def __init__(self, user=None, auth=None):
         super().__init__()
+        self.user = user or {"username": "admin", "role": "root"}
+        self.auth = auth
+        self._locked = False
         self.setWindowTitle(f"{APP_NAME} // {APP_SUBTITLE} [v{APP_VERSION}]")
         self.resize(1360, 860)
         self.setMinimumSize(1024, 640)
@@ -55,6 +62,7 @@ class MainWindow(QMainWindow):
         self._was_maximized = False
         self._right_was_visible = False
         self._setup_ui()
+        self._apply_user()
         self._setup_shortcuts()
         self._setup_tray()
         self._setup_telemetry_loop()
@@ -80,6 +88,7 @@ class MainWindow(QMainWindow):
         # Left Navigation Sidebar
         self.sidebar = NavigationSidebar(self)
         self.sidebar.module_selected.connect(self._on_navigation_change)
+        self.sidebar.lock_requested.connect(self.lock)
         body_layout.addWidget(self.sidebar)
 
         # Right Telemetry Rail
@@ -129,6 +138,8 @@ class MainWindow(QMainWindow):
         self.view_automation_center = AutomationCenterView(self)
         self.view_operation_history = OperationHistoryView(self)
         self.view_settings = SettingsView(self)
+        self.view_bills = BillsView(self)
+        self.view_groceries = GroceriesView(self)
 
         # Map to stack in order of MODULE_DEFINITIONS
         self.view_map = {
@@ -150,6 +161,8 @@ class MainWindow(QMainWindow):
             "network_monitor": self.view_network_monitor,
             "clock_calendar": self.view_clock_calendar,
             "notes_tasks": self.view_notes_tasks,
+            "bills": self.view_bills,
+            "groceries": self.view_groceries,
             "app_launcher": self.view_app_launcher,
             "automation_center": self.view_automation_center,
             "operation_history": self.view_operation_history,
@@ -162,8 +175,10 @@ class MainWindow(QMainWindow):
             if view:
                 self.stack.addWidget(view)
 
+        assert self.stack.count() == len(MODULE_DEFINITIONS), "every sidebar entry needs a page"
+
         # By default start on Widget Screen and hide right panel for edge-to-edge view
-        self.stack.setCurrentIndex(0)
+        self.navigate_by_id("widget_screen")
         self.right_panel.setVisible(False)
 
     def _setup_tray(self):
@@ -178,6 +193,7 @@ class MainWindow(QMainWindow):
         self.tray.setToolTip(APP_NAME)
         menu = QMenu(self)
         menu.addAction("Show CYPHER-X", self._show_from_tray)
+        menu.addAction("Lock", self.lock)
         menu.addAction("Play / Pause Music", self.view_widget_screen.music.toggle_play)
         menu.addSeparator()
         menu.addAction("Quit", self.quit_app)
@@ -187,6 +203,8 @@ class MainWindow(QMainWindow):
         self.tray.show()
 
     def _show_from_tray(self):
+        if self._locked:
+            return                       # the lock screen is already up
         self.showNormal() if not self._immersive else self.showFullScreen()
         self.raise_()
         self.activateWindow()
@@ -208,6 +226,8 @@ class MainWindow(QMainWindow):
         # Esc exit fullscreen
         shortcut_esc = QShortcut(QKeySequence("Escape"), self)
         shortcut_esc.activated.connect(self._exit_fullscreen)
+
+        QShortcut(QKeySequence("Ctrl+L"), self).activated.connect(self.lock)
 
     def _toggle_fullscreen(self):
         # The Home widget screen goes fully immersive; other modules just go full screen
@@ -250,6 +270,8 @@ class MainWindow(QMainWindow):
         self.view_widget_screen.on_immersive_changed(on)
 
     def _on_navigation_change(self, index: int, module_id: str):
+        if not module_allowed(module_id, self.user.get("role")):
+            return
         if index < self.stack.count():
             self.stack.setCurrentIndex(index)
             # Full edge-to-edge canvas for Widget Screen
@@ -259,10 +281,57 @@ class MainWindow(QMainWindow):
                 self.right_panel.setVisible(bool(get_pref("pref_right_panel")))
 
     def navigate_by_id(self, module_id: str):
+        if not module_allowed(module_id, self.user.get("role")):
+            name = MODULES.get(module_id, (module_id,))[0]
+            QMessageBox.information(self, "Root access needed",
+                                    f"{name} is a Server tool. Sign in as a root user to open it.")
+            return
         for idx, item in enumerate(MODULE_DEFINITIONS):
             if item[0] == module_id:
+                self.sidebar.expand_group_of(module_id)
                 self.sidebar._on_module_clicked(idx, module_id)
                 break
+
+    # ------------------------------------------------------------ accounts --
+
+    def _apply_user(self):
+        self.sidebar.set_user(self.user)
+        if hasattr(self.view_settings, "set_account"):
+            self.view_settings.set_account(self.auth, self.user)
+        current = MODULE_DEFINITIONS[self.stack.currentIndex()][0]
+        if not module_allowed(current, self.user.get("role")):
+            self.navigate_by_id("smart_dashboard")
+
+    def lock(self):
+        """Hide everything behind the sign-in screen. Any account may unlock;
+        the sidebar and pages follow the account that signs in."""
+        if self.auth is None or self._locked:
+            return
+        self._locked = True
+        was_full = self.isFullScreen()
+        self.hide()
+        while True:
+            dlg = LoginDialog(self.auth, locked_user=self.user.get("username"))
+            if dlg.exec() == LoginDialog.Accepted:
+                break
+            if QMessageBox.question(None, "Quit CYPHER-X?",
+                                    "The server stays locked. Quit CYPHER-X instead?") == QMessageBox.Yes:
+                self._locked = False
+                self.quit_app()
+                QApplication.quit()
+                return
+        self._locked = False
+        if dlg.user["username"].lower() != self.user.get("username", "").lower():
+            try:
+                Database.get_instance().log_operation("Accounts", f"Signed in as {dlg.user['username']}",
+                                                      "Success")
+            except Exception:
+                pass
+        self.user = dlg.user
+        self._apply_user()
+        self.showFullScreen() if was_full else self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
     def _setup_telemetry_loop(self):
         # Immediate sample

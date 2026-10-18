@@ -6,6 +6,9 @@ from app.config import APP_NAME, ORG_NAME, APP_VERSION
 from app.theme import get_cyber_stylesheet
 from app.main_window import MainWindow
 from app.ui_polish import apply_dark_palette, EXTRA_QSS
+from app.database import Database
+from app.services.auth_service import AuthService
+from app.widgets.login_dialog import LoginDialog
 
 def main():
     # High-DPI support
@@ -20,7 +23,13 @@ def main():
 
     # The window may hide to the system tray; quitting is handled explicitly
     app.setQuitOnLastWindowClosed(False)
-    window = MainWindow()
+
+    # Sign in first (first run: admin / admin, root access)
+    auth = AuthService(Database.get_instance())
+    login = LoginDialog(auth)
+    if login.exec() != LoginDialog.Accepted:
+        sys.exit(0)
+    window = MainWindow(user=login.user, auth=auth)
     window.show()
 
     sys.exit(app.exec())

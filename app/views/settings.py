@@ -113,6 +113,7 @@ class SettingsView(QWidget):
         left.addWidget(self._appearance_card())
         left.addWidget(self._home_card())
         left.addStretch()
+        right.addWidget(self._accounts_card())
         right.addWidget(self._system_card())
         right.addWidget(self._safety_card())
         right.addWidget(self._data_card())
@@ -198,6 +199,142 @@ class SettingsView(QWidget):
         QTimer.singleShot(0, self._bind_wallpapers)
         return card
 
+    # ------------------------------------------------------------ accounts --
+
+    def _accounts_card(self):
+        card, lo = self._card("Accounts", "Who can sign in to this server. Root accounts also see the "
+                                          "Server tools and manage users.")
+        self.acc_box = QVBoxLayout()
+        self.acc_box.setSpacing(8)
+        lo.addLayout(self.acc_box)
+        self.auth, self.user = None, None
+        return card
+
+    def set_account(self, auth, user):
+        self.auth, self.user = auth, user
+        self._fill_accounts()
+
+    def _fill_accounts(self):
+        def clear(layout):
+            while layout.count():
+                item = layout.takeAt(0)
+                if item.widget():
+                    item.widget().hide()
+                    item.widget().deleteLater()
+                elif item.layout():
+                    clear(item.layout())
+        box = self.acc_box
+        clear(box)
+        if self.auth is None:
+            return
+        root = self.user.get("role") == "root"
+        if hasattr(self, "clear_btn"):
+            self.clear_btn.setEnabled(root)          # the audit log is root's to clear
+            self.clear_btn.setToolTip("" if root else "Root access needed")
+        me = QLabel(f"Signed in as <b>{self.user['username']}</b> · "
+                    f"{'root access' if root else 'user'}")
+        me.setStyleSheet("color:#e2e8f0;font-size:12px;background:transparent;")
+        box.addWidget(me)
+        if self.auth.uses_default_password():
+            warn = QLabel("The admin account still uses the default password <b>admin</b>. "
+                          "Anyone on this PC can sign in as root — change it.")
+            warn.setWordWrap(True)
+            warn.setStyleSheet("color:#fbbf24;font-size:11px;background:rgba(251,191,36,0.10);"
+                               "border:1px solid rgba(251,191,36,0.35);border-radius:8px;padding:6px 8px;")
+            box.addWidget(warn)
+        row = QHBoxLayout()
+        chg = QPushButton("Change my password…")
+        chg.clicked.connect(self._change_password)
+        row.addWidget(chg)
+        if root:
+            add = QPushButton("Add user…")
+            add.clicked.connect(self._add_user)
+            row.addWidget(add)
+        row.addStretch()
+        box.addLayout(row)
+        if root:
+            for u in self.auth.users():
+                line = QHBoxLayout()
+                lbl = QLabel(f"<b>{u['username']}</b>  <span style='color:#64748b'>· {u['role']}</span>")
+                lbl.setToolTip(f"Last sign-in: {u['last_login'][:16]}" if u["last_login"] else "Never signed in")
+                lbl.setStyleSheet("color:#cbd5e1;font-size:12px;background:transparent;")
+                lbl.setMinimumWidth(60)
+                line.addWidget(lbl, 1)
+                if u["username"].lower() != self.user["username"].lower():
+                    reset = QPushButton("Reset")
+                    reset.setToolTip("Set a new password for this user")
+                    reset.clicked.connect(lambda _=False, n=u["username"]: self._reset_password(n))
+                    rm = QPushButton("Remove")
+                    rm.setObjectName("danger-btn")
+                    rm.clicked.connect(lambda _=False, n=u["username"]: self._remove_user(n))
+                    line.addWidget(reset)
+                    line.addWidget(rm)
+                box.addLayout(line)
+
+    def _password_form(self, title, fields):
+        """fields: list of (label, is_password[, choices]). Returns values or None."""
+        from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QDialogButtonBox
+        dlg = QDialog(self)
+        dlg.setWindowTitle(title)
+        form = QFormLayout(dlg)
+        widgets = []
+        for spec in fields:
+            label, secret = spec[0], spec[1]
+            if len(spec) > 2:
+                w = QComboBox()
+                w.addItems(spec[2])
+            else:
+                w = QLineEdit()
+                if secret:
+                    w.setEchoMode(QLineEdit.Password)
+            form.addRow(label, w)
+            widgets.append(w)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return None
+        return [w.currentText() if isinstance(w, QComboBox) else w.text() for w in widgets]
+
+    def _account_action(self, fn, done_msg):
+        from app.services.auth_service import AuthError
+        try:
+            fn()
+        except AuthError as e:
+            QMessageBox.warning(self, "Accounts", str(e))
+            return False
+        Database.get_instance().log_operation("Accounts", done_msg, "Success")
+        self._fill_accounts()
+        return True
+
+    def _change_password(self):
+        v = self._password_form("Change password", [("Current password", True), ("New password", True),
+                                                    ("Repeat new password", True)])
+        if not v:
+            return
+        if v[1] != v[2]:
+            QMessageBox.warning(self, "Accounts", "The new passwords don't match.")
+            return
+        if self._account_action(lambda: self.auth.change_password(self.user["username"], v[0], v[1]),
+                                f"Password changed for {self.user['username']}"):
+            QMessageBox.information(self, "Accounts", "Password changed.")
+
+    def _add_user(self):
+        v = self._password_form("Add user", [("User name", False), ("Password", True),
+                                             ("Role", False, ["user", "root"])])
+        if v:
+            self._account_action(lambda: self.auth.add_user(v[0], v[1], v[2]), f"User added: {v[0]} ({v[2]})")
+
+    def _reset_password(self, name):
+        v = self._password_form(f"Reset password for {name}", [("New password", True)])
+        if v:
+            self._account_action(lambda: self.auth.reset_password(name, v[0]), f"Password reset for {name}")
+
+    def _remove_user(self, name):
+        if QMessageBox.question(self, "Remove user", f"Remove the account '{name}'?") == QMessageBox.Yes:
+            self._account_action(lambda: self.auth.remove_user(name), f"User removed: {name}")
+
     def _system_card(self):
         card, lo = self._card("System")
         g = QGridLayout()
@@ -255,6 +392,7 @@ class SettingsView(QWidget):
         clear_btn = QPushButton("Clear Operation History")
         clear_btn.setObjectName("danger-btn")
         clear_btn.clicked.connect(self._clear_history)
+        self.clear_btn = clear_btn
         row.addWidget(open_btn)
         row.addWidget(clear_btn)
         row.addStretch()
