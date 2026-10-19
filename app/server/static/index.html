@@ -3,301 +3,683 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b1220">
+<meta name="theme-color" content="#060b12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3f6fa" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CYPHER-X">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.svg">
 <title>CYPHER-X Home</title>
 <style>
   :root {
-    --bg: #070d14; --card: rgba(20, 30, 42, 0.82); --line: rgba(255,255,255,0.10);
-    --text: #f8fafc; --soft: #cbd5e1; --muted: #94a3b8; --dim: #64748b;
-    --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #f43f5e;
+    --bg: #060b12; --bg2: #0b1622; --surface: rgba(19, 29, 41, 0.82); --surface2: rgba(255,255,255,0.05);
+    --line: rgba(255,255,255,0.08); --line2: rgba(255,255,255,0.14);
+    --text: #f1f5f9; --soft: #cbd5e1; --muted: #94a3b8; --dim: #64748b;
+    --accent: #38bdf8; --accent-ink: #04131d; --good: #22c55e; --good-bg: rgba(34,197,94,.14);
+    --warn: #f59e0b; --warn-bg: rgba(245,158,11,.14); --bad: #f43f5e; --bad-bg: rgba(244,63,94,.14);
+    --track: rgba(255,255,255,0.08); --shadow: 0 10px 30px rgba(0,0,0,.35);
+    --radius: 20px; --tab-h: 64px; --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f3f6fa; --bg2: #e8eef6; --surface: rgba(255,255,255,0.92); --surface2: rgba(15,23,42,0.04);
+      --line: rgba(15,23,42,0.08); --line2: rgba(15,23,42,0.14);
+      --text: #0f172a; --soft: #334155; --muted: #64748b; --dim: #94a3b8;
+      --accent: #0284c7; --accent-ink: #ffffff; --good: #16a34a; --good-bg: rgba(22,163,74,.12);
+      --warn: #d97706; --warn-bg: rgba(217,119,6,.12); --bad: #e11d48; --bad-bg: rgba(225,29,72,.10);
+      --track: rgba(15,23,42,0.08); --shadow: 0 8px 24px rgba(15,23,42,.08);
+    }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; background: var(--bg); color: var(--text);
-    font: 14px/1.4 -apple-system, "Segoe UI", Roboto, "Inter", sans-serif; }
-  body { background: radial-gradient(120% 60% at 20% 0%, #0f2a3a 0%, var(--bg) 60%) fixed; min-height: 100vh; }
-  main { max-width: 760px; margin: 0 auto; padding: 16px 16px 96px; }
-  h1 { font-size: 22px; font-weight: 600; margin: 4px 0 2px; }
-  .sub { color: var(--muted); font-size: 12px; }
-  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; }
-  .card h2 { margin: 0 0 6px; font-size: 10px; letter-spacing: 1.3px; text-transform: uppercase; color: var(--muted); font-weight: 800; }
-  .big { font-size: 24px; font-weight: 300; }
-  .wide { grid-column: 1 / -1; }
-  .row { display: flex; align-items: center; gap: 10px; }
-  .chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;
-    border: 1px solid; }
-  .chip.good { color: #d1fae5; background: rgba(16,185,129,.15); border-color: rgba(16,185,129,.5); }
-  .chip.bad { color: #ffe4e6; background: rgba(244,63,94,.15); border-color: rgba(244,63,94,.5); }
-  .chip.warn { color: #fef3c7; background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.5); }
-  .chip.dim { color: var(--soft); background: rgba(255,255,255,.06); border-color: var(--line); }
-  .bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; margin-top: 8px; }
-  .bar > i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
-  .devices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .dev { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; background: rgba(255,255,255,.04);
-    cursor: pointer; user-select: none; transition: background .15s, border-color .15s; }
-  .dev.on { background: rgba(16,185,129,.14); border-color: rgba(16,185,129,.55); }
-  .dev b { display: block; font-size: 13px; }
-  .dev span { color: var(--muted); font-size: 11px; }
-  .dev .st { float: right; font-size: 10px; font-weight: 800; color: var(--dim); }
-  .dev.on .st { color: var(--good); }
-  button { font: inherit; border-radius: 999px; padding: 9px 16px; border: 1px solid var(--line);
-    background: rgba(255,255,255,.07); color: var(--text); font-weight: 600; cursor: pointer; }
-  button.primary { background: var(--accent); color: #04131d; border: none; font-weight: 800; }
-  button:active { transform: scale(.98); }
-  input { font: inherit; width: 100%; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--line);
-    background: rgba(255,255,255,.06); color: var(--text); }
-  input:focus { outline: none; border-color: var(--accent); }
-  label { display: block; color: var(--muted); font-size: 12px; margin: 10px 0 4px; }
-  .snap { width: 100%; border-radius: 12px; background: #02060a; min-height: 160px; object-fit: contain; display: block; }
-  .list { margin: 0; padding: 0; list-style: none; }
-  .list li { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
-  .list li:last-child { border-bottom: none; }
-  .list .done { color: var(--dim); text-decoration: line-through; }
-  nav { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(7, 13, 20, .92); backdrop-filter: blur(12px);
-    border-top: 1px solid var(--line); display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom); }
-  nav button { flex: 1; max-width: 190px; border: none; background: none; border-radius: 0; padding: 12px 0;
-    color: var(--muted); font-size: 12px; }
-  nav button.active { color: var(--accent); }
-  .login { max-width: 360px; margin: 12vh auto 0; }
-  .err { color: #fb7185; font-size: 12px; min-height: 18px; margin-top: 8px; }
-  .toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #0f172a;
-    border: 1px solid var(--line); padding: 8px 14px; border-radius: 999px; font-size: 12px; opacity: 0;
-    transition: opacity .2s; pointer-events: none; }
-  .toast.show { opacity: 1; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Inter, sans-serif;
+    -webkit-font-smoothing: antialiased; }
+  body { background: radial-gradient(110% 55% at 15% -5%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
+                     radial-gradient(90% 50% at 100% 0%, color-mix(in srgb, var(--good) 10%, transparent), transparent 55%), var(--bg);
+         background-attachment: fixed; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; border: none; background: none; padding: 0; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+  .ic { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .ic.sm { width: 18px; height: 18px; } .ic.lg { width: 26px; height: 26px; }
   .hidden { display: none !important; }
-  @media (max-width: 380px) { .grid, .devices { grid-template-columns: 1fr; } }
+  .muted { color: var(--muted); } .soft { color: var(--soft); }
+
+  /* ---------- layout ---------- */
+  .app { min-height: 100vh; padding-bottom: calc(var(--tab-h) + var(--safe-b) + 16px); }
+  header.top { position: sticky; top: 0; z-index: 20; padding: calc(10px + var(--safe-t)) 16px 10px;
+    background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: saturate(160%) blur(16px);
+    -webkit-backdrop-filter: saturate(160%) blur(16px); border-bottom: 1px solid var(--line); }
+  .top-row { display: flex; align-items: center; gap: 12px; max-width: 1100px; margin: 0 auto; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--good)); color: #04131d; flex: none; }
+  .hello { flex: 1; min-width: 0; }
+  .hello b { display: block; font-size: 17px; letter-spacing: -.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hello span { font-size: 12px; color: var(--muted); }
+  .icon-btn { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--soft);
+    background: var(--surface2); border: 1px solid var(--line); }
+  .icon-btn:active { transform: scale(.94); }
+  .spin { animation: spin .8s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+  .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; max-width: 1100px; margin: 10px auto 0;
+    padding-bottom: 2px; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; padding: 6px 11px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; background: var(--surface2); border: 1px solid var(--line); color: var(--soft); }
+  .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
+  .chip.good { background: var(--good-bg); border-color: color-mix(in srgb, var(--good) 40%, transparent); color: var(--text); }
+  .chip.good .dot { background: var(--good); }
+  .chip.bad { background: var(--bad-bg); border-color: color-mix(in srgb, var(--bad) 45%, transparent); color: var(--text); }
+  .chip.bad .dot { background: var(--bad); animation: pulse 1.4s infinite; }
+  .chip.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 45%, transparent); color: var(--text); }
+  .chip.warn .dot { background: var(--warn); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  main { max-width: 1100px; margin: 0 auto; padding: 14px 16px 0; }
+  .view { display: grid; gap: 12px; animation: fade .18s ease-out; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
+  .section-title { display: flex; align-items: center; justify-content: space-between; margin: 8px 2px 0;
+    font-size: 13px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
+  .section-title button { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: none; letter-spacing: 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px;
+    box-shadow: var(--shadow); }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+  /* ---------- hero ---------- */
+  .hero { display: grid; grid-template-columns: 132px 1fr; gap: 16px; align-items: center; }
+  .ring { position: relative; width: 132px; height: 132px; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring .trk { stroke: var(--track); } .ring .val { stroke: var(--accent); transition: stroke-dashoffset .6s ease, stroke .3s; }
+  .ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+  .ring-center b { font-size: 26px; font-weight: 300; letter-spacing: -.5px; }
+  .ring-center span { font-size: 11px; color: var(--muted); }
+  .kv { display: grid; gap: 10px; }
+  .kv div { display: flex; flex-direction: column; }
+  .kv small { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+  .kv strong { font-size: 17px; font-weight: 600; }
+
+  /* ---------- quick actions ---------- */
+  .actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .action { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px; border-radius: 16px;
+    background: var(--surface); border: 1px solid var(--line); font-size: 12px; font-weight: 700; color: var(--soft);
+    box-shadow: var(--shadow); min-height: 76px; justify-content: center; }
+  .action .ic { color: var(--accent); }
+  .action:active { transform: scale(.96); }
+  .action.on { background: var(--good-bg); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+  .action.on .ic { color: var(--good); }
+
+  /* ---------- rooms ---------- */
+  .rooms { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 1fr); gap: 10px; overflow-x: auto;
+    scrollbar-width: none; scroll-snap-type: x mandatory; padding-bottom: 2px; }
+  .rooms::-webkit-scrollbar { display: none; }
+  .room { scroll-snap-align: start; padding: 14px; }
+  .room b { display: block; font-size: 14px; } .room .w { font-size: 22px; font-weight: 300; margin-top: 4px; }
+  .bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; margin-top: 10px; }
+  .bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width .5s; }
+
+  /* ---------- devices ---------- */
+  .filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+  .filters::-webkit-scrollbar { display: none; }
+  .filters button { padding: 8px 14px; border-radius: 999px; background: var(--surface2); border: 1px solid var(--line);
+    font-size: 13px; font-weight: 700; color: var(--soft); white-space: nowrap; }
+  .filters button.active { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .tile { position: relative; text-align: left; display: flex; flex-direction: column; gap: 10px; padding: 14px;
+    border-radius: 18px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
+    min-height: 120px; transition: background .2s, border-color .2s, transform .1s; }
+  .tile:active { transform: scale(.97); }
+  .tile .ico { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center;
+    background: var(--surface2); color: var(--soft); transition: background .2s, color .2s; }
+  .tile b { font-size: 14px; line-height: 1.2; }
+  .tile small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .tile .row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .tile.on { background: color-mix(in srgb, var(--good) 12%, var(--surface)); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+  .tile.on .ico { background: var(--good); color: #04140d; }
+  .tile.pending { opacity: .65; }
+  .live { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; color: var(--good); }
+  .live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
+  .switch { position: relative; width: 46px; height: 28px; border-radius: 999px; background: var(--track); flex: none;
+    transition: background .2s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s; }
+  .on .switch, .switch.on { background: var(--good); } .on .switch::after, .switch.on::after { transform: translateX(18px); }
+
+  /* ---------- lists ---------- */
+  .list { display: grid; }
+  .li { display: flex; align-items: center; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--line); min-height: 52px; }
+  .li:last-child { border-bottom: none; }
+  .li .grow { flex: 1; min-width: 0; }
+  .li .grow b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .li .grow small { color: var(--muted); font-size: 12px; }
+  .li .amt { font-weight: 700; font-size: 14px; white-space: nowrap; }
+  .pill { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .pill.good { background: var(--good-bg); color: var(--good); } .pill.bad { background: var(--bad-bg); color: var(--bad); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); } .pill.dim { background: var(--surface2); color: var(--muted); }
+  .check { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line2); display: grid; place-items: center; flex: none; }
+  .check.done { background: var(--good); border-color: var(--good); color: #04140d; }
+  .done-text { text-decoration: line-through; color: var(--dim) !important; }
+  .stat small { display: block; font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+  .stat b { display: block; font-size: 22px; font-weight: 400; margin-top: 4px; letter-spacing: -.3px; }
+  .stat span { font-size: 12px; color: var(--muted); }
+
+  /* ---------- security ---------- */
+  .arm-card { display: flex; align-items: center; gap: 14px; }
+  .arm-card .ico { width: 54px; height: 54px; border-radius: 18px; display: grid; place-items: center; background: var(--surface2); color: var(--muted); }
+  .arm-card.armed .ico { background: var(--good); color: #04140d; }
+  .cam { position: relative; border-radius: 16px; overflow: hidden; background: #02060a; aspect-ratio: 16 / 9; }
+  .cam img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cam .badge { position: absolute; left: 10px; top: 10px; background: rgba(0,0,0,.55); color: #fff; font-size: 11px;
+    font-weight: 700; padding: 4px 9px; border-radius: 999px; backdrop-filter: blur(6px); }
+  .cam .empty { position: absolute; inset: 0; display: grid; place-items: center; color: #64748b; font-size: 13px; }
+
+  /* ---------- bottom tabs / side rail ---------- */
+  nav.tabs { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; height: calc(var(--tab-h) + var(--safe-b));
+    padding-bottom: var(--safe-b); display: flex; background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: saturate(160%) blur(18px); -webkit-backdrop-filter: saturate(160%) blur(18px); border-top: 1px solid var(--line); }
+  nav.tabs button { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    color: var(--dim); font-size: 11px; font-weight: 700; }
+  nav.tabs button.active { color: var(--accent); }
+  nav.tabs .brand { display: none; }
+
+  /* ---------- sheet, toast, banner ---------- */
+  .scrim { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.45); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .sheet { position: fixed; z-index: 41; left: 0; right: 0; bottom: 0; max-width: 560px; margin: 0 auto;
+    background: var(--bg2); border-radius: 24px 24px 0 0; border: 1px solid var(--line); padding: 10px 18px calc(20px + var(--safe-b));
+    transform: translateY(105%); visibility: hidden; transition: transform .25s cubic-bezier(.2,.8,.2,1), visibility 0s .25s; box-shadow: 0 -10px 40px rgba(0,0,0,.4); }
+  .sheet.open { transform: none; visibility: visible; transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+  .grabber { width: 40px; height: 5px; border-radius: 3px; background: var(--line2); margin: 0 auto 12px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface2); border-radius: 12px; padding: 4px; gap: 4px; }
+  .seg button { padding: 9px; border-radius: 9px; font-weight: 700; font-size: 14px; color: var(--muted); }
+  .seg button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin: 14px 2px 6px; }
+  input { width: 100%; padding: 14px; font-size: 17px; border-radius: 14px; border: 1px solid var(--line2);
+    background: var(--surface); outline: none; }
+  input:focus { border-color: var(--accent); }
+  .btn { width: 100%; padding: 15px; border-radius: 14px; background: var(--accent); color: var(--accent-ink);
+    font-weight: 800; font-size: 16px; margin-top: 16px; }
+  .btn:active { transform: scale(.98); } .btn.ghost { background: var(--surface2); color: var(--text); }
+  .toast { position: fixed; z-index: 50; left: 50%; bottom: calc(var(--tab-h) + var(--safe-b) + 14px); transform: translate(-50%, 20px);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; max-width: 90vw; text-align: center; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .banner { position: fixed; z-index: 35; left: 12px; right: 12px; top: calc(8px + var(--safe-t)); max-width: 560px; margin: 0 auto;
+    background: var(--bad); color: #fff; border-radius: 14px; padding: 10px 14px; font-size: 13px; font-weight: 700;
+    display: flex; gap: 8px; align-items: center; box-shadow: var(--shadow); }
+  .skel { background: linear-gradient(90deg, var(--surface2), var(--line), var(--surface2)); background-size: 200% 100%;
+    animation: shimmer 1.2s infinite; border-radius: 14px; min-height: 90px; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ---------- login ---------- */
+  .login { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+  .login .card { width: 100%; max-width: 380px; padding: 26px 22px; }
+  .logo { width: 64px; height: 64px; border-radius: 18px; margin: 0 auto 14px; display: block; }
+  .login h1 { text-align: center; font-size: 24px; margin: 0; letter-spacing: -.4px; }
+  .login p { text-align: center; color: var(--muted); margin: 6px 0 8px; font-size: 14px; }
+  .err { color: var(--bad); font-size: 13px; font-weight: 600; min-height: 18px; margin-top: 10px; text-align: center; }
+  .pw { position: relative; } .pw button { position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    width: 40px; height: 40px; display: grid; place-items: center; color: var(--muted); }
+
+  /* ---------- tablet & desktop ---------- */
+  @media (min-width: 640px) {
+    .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .hero { grid-template-columns: 160px 1fr; } .ring { width: 160px; height: 160px; }
+    .kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (min-width: 960px) {
+    :root { --tab-h: 0px; }
+    .app { padding-left: 232px; padding-bottom: 24px; }
+    nav.tabs { top: 0; right: auto; width: 232px; height: auto; flex-direction: column; justify-content: flex-start;
+      gap: 4px; padding: 20px 12px; border-top: none; border-right: 1px solid var(--line); }
+    nav.tabs .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 18px; font-weight: 800; letter-spacing: 2px;
+      font-size: 13px; color: var(--text); }
+    nav.tabs .brand img { width: 30px; height: 30px; border-radius: 9px; }
+    nav.tabs button { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 12px 14px;
+      border-radius: 12px; font-size: 14px; }
+    nav.tabs button.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+    .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .rooms { grid-auto-flow: row; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); overflow: visible; padding: 0; }
+    .desk2 { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start; }
+    .toast { bottom: 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-<main id="login" class="login hidden">
-  <div class="card">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 15l3.5-3.5"/><path d="M20.3 18a10 10 0 1 0-16.6 0"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="i-tv" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="m17 2-5 5-5-5"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5A6 6 0 1 0 7.5 11.5c.8.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/></symbol>
+  <symbol id="i-fan" viewBox="0 0 24 24"><path d="M10.8 16.4a6 6 0 0 1-8.6-7l5.4 1.4a6 6 0 0 1 7-8.6l-1.5 5.4a6 6 0 0 1 8.6 7l-5.4-1.4a6 6 0 0 1-7 8.6z"/><circle cx="12" cy="12" r=".5"/></symbol>
+  <symbol id="i-fridge" viewBox="0 0 24 24"><path d="M5 6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M5 10h14M15 7v6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M2 2l20 20"/><path d="M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5.2-2.8M19 13a10 10 0 0 0-2.2-1.6M12 20h.01"/></symbol>
+</svg>
+
+<!-- ======================= login ======================= -->
+<section id="login" class="login hidden" aria-label="Sign in">
+  <form class="card" id="loginForm" autocomplete="on">
+    <img class="logo" src="/icon.svg" alt="">
     <h1>CYPHER-X</h1>
-    <div class="sub">Sign in with your CYPHER-X account</div>
-    <form id="loginForm">
-      <label for="u">User name</label><input id="u" autocomplete="username" required>
-      <label for="p">Password</label><input id="p" type="password" autocomplete="current-password" required>
-      <div class="err" id="loginErr"></div>
-      <button class="primary" style="width:100%" type="submit">Sign in</button>
-    </form>
-  </div>
-</main>
+    <p>Sign in to your home</p>
+    <label for="u">User name</label>
+    <input id="u" autocomplete="username" autocapitalize="none" required>
+    <label for="p">Password</label>
+    <div class="pw"><input id="p" type="password" autocomplete="current-password" required>
+      <button type="button" id="showPw" aria-label="Show password"><svg class="ic sm"><use href="#i-eye"/></svg></button></div>
+    <div class="err" id="loginErr" role="alert"></div>
+    <button class="btn" type="submit">Sign in</button>
+  </form>
+</section>
 
-<main id="app" class="hidden">
-  <div class="row" style="justify-content:space-between">
-    <div><h1 id="greet">Home</h1><div class="sub" id="when"></div></div>
-    <button id="logout" title="Sign out">Sign out</button>
-  </div>
+<!-- ======================= app ======================= -->
+<div id="app" class="app hidden">
+  <header class="top">
+    <div class="top-row">
+      <div class="avatar" id="avatar">A</div>
+      <div class="hello"><b id="greet">Hello</b><span id="when">—</span></div>
+      <button class="icon-btn" id="refreshBtn" aria-label="Refresh"><svg class="ic sm" id="refreshIc"><use href="#i-refresh"/></svg></button>
+      <button class="icon-btn" id="logout" aria-label="Sign out"><svg class="ic sm"><use href="#i-logout"/></svg></button>
+    </div>
+    <div class="chips" id="chips" aria-label="Home status"></div>
+  </header>
 
-  <section id="tab-home">
-    <div class="grid">
-      <div class="card"><h2>Live load</h2><div class="big" id="load">—</div><div class="sub" id="loadSub"></div>
-        <div class="bar"><i id="loadBar" style="width:0"></i></div></div>
-      <div class="card"><h2>Battery</h2><div class="big" id="bat">—</div><div class="sub" id="batSub"></div></div>
-      <div class="card"><h2>Grid</h2><div id="grid">—</div><div class="sub" id="gridSub"></div></div>
-      <div class="card"><h2>Prepaid meter</h2><div class="big" id="meter">—</div><div class="sub" id="meterSub"></div></div>
-      <div class="card wide">
-        <div class="row" style="justify-content:space-between"><h2 style="margin:0">Appliances</h2>
-          <button id="alloff">All off</button></div>
-        <div class="devices" id="devices" style="margin-top:10px"></div>
-      </div>
-      <div class="card wide">
-        <h2>Meter</h2>
-        <div class="row">
-          <input id="units" inputmode="decimal" placeholder="Units left on the meter">
-          <button id="saveReading">Save</button>
+  <main>
+    <!-- HOME -->
+    <section class="view" id="v-home">
+      <div class="skel" id="skel"></div>
+      <div class="desk2" id="homeBody" hidden>
+        <div style="display:grid;gap:12px">
+          <div class="card hero">
+            <div class="ring" aria-label="Live load">
+              <svg viewBox="0 0 120 120"><circle class="trk" cx="60" cy="60" r="52" stroke-width="10" fill="none"/>
+                <circle class="val" id="ringVal" cx="60" cy="60" r="52" stroke-width="10" fill="none" stroke-linecap="round"
+                        stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg>
+              <div class="ring-center"><b id="loadW">0 W</b><span id="loadPct">of inverter</span></div>
+            </div>
+            <div class="kv">
+              <div><small>Spending now</small><strong id="perHour">—</strong></div>
+              <div><small>Battery</small><strong id="battery">—</strong></div>
+              <div><small>Typical day</small><strong id="perDay">—</strong></div>
+              <div><small>Meter</small><strong id="meterShort">—</strong></div>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="action" id="aAllOff"><svg class="ic"><use href="#i-power"/></svg>All off</button>
+            <button class="action" id="aArm"><svg class="ic"><use href="#i-shield"/></svg><span>Arm</span></button>
+            <button class="action" id="aCam"><svg class="ic"><use href="#i-camera"/></svg>Camera</button>
+            <button class="action" id="aMeter"><svg class="ic"><use href="#i-gauge"/></svg>Meter</button>
+          </div>
         </div>
-        <div class="row" style="margin-top:8px">
-          <input id="tokAmount" inputmode="decimal" placeholder="Token ₦">
-          <input id="tokUnits" inputmode="decimal" placeholder="kWh">
-          <button id="saveToken">Add</button>
+        <div style="display:grid;gap:12px">
+          <div class="section-title">Rooms</div>
+          <div class="rooms" id="rooms"></div>
+          <div class="section-title">On now <button data-go="devices">All devices</button></div>
+          <div class="card list" id="onNow"></div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section id="tab-security" class="hidden">
-    <div class="grid">
-      <div class="card wide">
-        <div class="row" style="justify-content:space-between">
-          <div><h2 style="margin:0">Security</h2><div class="sub" id="secSub"></div></div>
-          <button id="arm" class="primary">Arm</button>
+    <!-- DEVICES -->
+    <section class="view hidden" id="v-devices">
+      <div class="filters" id="filters"></div>
+      <div class="tiles" id="tiles"></div>
+      <p class="muted" style="font-size:12px;text-align:center;margin:4px 0 0" id="devHint"></p>
+    </section>
+
+    <!-- SECURITY -->
+    <section class="view hidden" id="v-security">
+      <div class="desk2">
+        <div style="display:grid;gap:12px">
+          <button class="card arm-card" id="armCard" style="text-align:left;width:100%">
+            <div class="ico"><svg class="ic lg"><use href="#i-shield"/></svg></div>
+            <div style="flex:1"><b id="armTitle" style="font-size:17px">Disarmed</b><br><span class="muted" id="armSub" style="font-size:13px"></span></div>
+            <div class="switch" id="armSwitch"></div>
+          </button>
+          <div class="card" style="padding:10px">
+            <div class="cam" id="camBox"><img id="camImg" alt="Latest camera picture"><div class="empty" id="camEmpty">No camera picture yet</div>
+              <span class="badge" id="camBadge" hidden></span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 6px 2px">
+              <span class="muted" style="font-size:12px" id="camWhen"></span>
+              <button class="chip" id="camRefresh"><svg class="ic sm"><use href="#i-refresh"/></svg>Refresh</button>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;gap:12px">
+          <div class="section-title">Cameras</div>
+          <div class="card list" id="camList"></div>
         </div>
       </div>
-      <div class="card wide">
-        <div class="row" style="justify-content:space-between"><h2 style="margin:0">Camera</h2>
-          <button id="refreshSnap">Refresh</button></div>
-        <img id="snap" class="snap" alt="Latest camera picture" style="margin-top:10px">
-        <div class="sub" id="snapSub" style="margin-top:6px"></div>
+    </section>
+
+    <!-- MONEY -->
+    <section class="view hidden" id="v-money">
+      <div class="grid2">
+        <div class="card stat"><small>Bills / month</small><b id="billsMonth">—</b><span id="billsSub"></span></div>
+        <div class="card stat"><small>Due this month</small><b id="billsDue">—</b><span id="billsPaid"></span></div>
       </div>
-    </div>
-  </section>
+      <div class="desk2">
+        <div style="display:grid;gap:12px">
+          <div class="section-title">Bills</div>
+          <div class="card list" id="billList"></div>
+        </div>
+        <div style="display:grid;gap:12px">
+          <div class="section-title"><span id="groTitle">Shopping list</span></div>
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;font-size:13px"><span class="muted" id="groSub"></span><b id="groTotal"></b></div>
+            <div class="bar"><i id="groBar" style="width:0"></i></div>
+            <div class="list" id="groList" style="margin-top:6px"></div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-  <section id="tab-money" class="hidden">
-    <div class="grid">
-      <div class="card"><h2>Bills / month</h2><div class="big" id="billsMonth">—</div><div class="sub" id="billsSub"></div></div>
-      <div class="card"><h2>Due this month</h2><div class="big" id="billsDue">—</div><div class="sub" id="billsPaid"></div></div>
-      <div class="card wide"><h2>Bills</h2><ul class="list" id="billList"></ul></div>
-      <div class="card wide"><h2 id="groTitle">Groceries</h2><div class="sub" id="groSub"></div>
-        <ul class="list" id="groList" style="margin-top:6px"></ul></div>
-    </div>
-  </section>
+    <!-- SERVER -->
+    <section class="view hidden" id="v-server">
+      <div class="grid2">
+        <div class="card stat"><small>CPU</small><b id="cpu">—</b><div class="bar"><i id="cpuBar"></i></div></div>
+        <div class="card stat"><small>Memory</small><b id="ram">—</b><div class="bar"><i id="ramBar"></i></div></div>
+        <div class="card stat"><small>Disk</small><b id="disk">—</b><div class="bar"><i id="diskBar"></i></div></div>
+        <div class="card stat"><small>Uptime</small><b id="up">—</b><span id="svcSum"></span></div>
+      </div>
+      <div class="section-title">Services</div>
+      <div class="card list" id="svcList"></div>
+    </section>
+  </main>
 
-  <section id="tab-server" class="hidden">
-    <div class="grid">
-      <div class="card"><h2>CPU</h2><div class="big" id="cpu">—</div></div>
-      <div class="card"><h2>Memory</h2><div class="big" id="ram">—</div></div>
-      <div class="card"><h2>Disk</h2><div class="big" id="disk">—</div></div>
-      <div class="card"><h2>Uptime</h2><div class="big" id="up">—</div></div>
-      <div class="card wide"><h2>Services</h2><ul class="list" id="svcList"></ul></div>
-    </div>
-  </section>
-</main>
+  <nav class="tabs" id="tabs" aria-label="Sections">
+    <div class="brand"><img src="/icon.svg" alt="">CYPHER-X</div>
+    <button data-tab="home" class="active"><svg class="ic"><use href="#i-home"/></svg>Home</button>
+    <button data-tab="devices"><svg class="ic"><use href="#i-plug"/></svg>Devices</button>
+    <button data-tab="security"><svg class="ic"><use href="#i-shield"/></svg>Security</button>
+    <button data-tab="money"><svg class="ic"><use href="#i-wallet"/></svg>Money</button>
+    <button data-tab="server" id="tabServer" class="hidden"><svg class="ic"><use href="#i-server"/></svg>Server</button>
+  </nav>
+</div>
 
-<nav id="nav" class="hidden">
-  <button data-tab="home" class="active">Home</button>
-  <button data-tab="security">Security</button>
-  <button data-tab="money">Money</button>
-  <button data-tab="server" id="navServer" class="hidden">Server</button>
-</nav>
-<div class="toast" id="toast"></div>
+<!-- meter sheet -->
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Prepaid meter">
+  <div class="grabber"></div>
+  <div class="seg" id="seg"><button class="active" data-mode="reading">Meter reading</button><button data-mode="token">Bought token</button></div>
+  <form id="meterForm">
+    <div id="fReading"><label for="units">Units left on the meter (kWh)</label>
+      <input id="units" type="number" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 64.5"></div>
+    <div id="fToken" class="hidden">
+      <label for="tokAmount" id="tokAmountLbl">Amount paid</label>
+      <input id="tokAmount" type="number" inputmode="decimal" step="1" min="0" placeholder="e.g. 5000">
+      <label for="tokUnits">Units on the receipt (kWh)</label>
+      <input id="tokUnits" type="number" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 22">
+    </div>
+    <button class="btn" type="submit">Save</button>
+    <button class="btn ghost" type="button" id="sheetCancel">Cancel</button>
+  </form>
+</div>
+<div class="banner hidden" id="offline"><svg class="ic sm"><use href="#i-wifi-off"/></svg><span>Can't reach CYPHER-X — retrying…</span></div>
+<div class="toast" id="toast" role="status"></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let me = null, tab = "home", cur = "₦", timer = null;
+let me = null, tab = "home", cur = "₦", timer = null, roomFilter = "all", lastStatus = null, busy = false;
+const pending = new Set();
+const ICON = { tv_wall: "tv", fan: "fan", ceiling_light: "bulb", fridge: "fridge" };
+const tap = () => { try { navigator.vibrate && navigator.vibrate(10); } catch (e) {} };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = (v) => cur + Math.round(v || 0).toLocaleString();
+const watts = (w) => Math.round(w || 0).toLocaleString() + " W";
+function hours(h) { if (h == null) return "—"; if (h >= 48) return (h / 24).toFixed(1) + " days";
+  const m = Math.round(h * 60); return Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m"; }
+function ago(ts) { const s = Date.now() / 1000 - ts; return s < 90 ? "just now" : s < 3600 ? Math.round(s / 60) + " min ago"
+  : s < 86400 ? Math.round(s / 3600) + " h ago" : new Date(ts * 1000).toLocaleDateString(); }
+const icon = (name, cls = "") => `<svg class="ic ${cls}"><use href="#i-${name}"/></svg>`;
 
 async function api(path, body) {
-  const opts = body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"},
-                                          body: JSON.stringify(body)};
-  const r = await fetch("/api/" + path, opts);
+  const opts = body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)};
+  let r;
+  try { r = await fetch("/api/" + path, opts); }
+  catch (e) { $("offline").classList.remove("hidden"); throw new Error("offline"); }
+  $("offline").classList.add("hidden");
   if (r.status === 401 && path !== "login") { showLogin(); throw new Error("signed out"); }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || ("Error " + r.status));
   return data;
 }
-function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 1800); }
-const money = (v) => cur + Math.round(v).toLocaleString();
-function hours(h) { if (h == null) return "—"; if (h >= 48) return (h / 24).toFixed(1) + " days";
-  const m = Math.round(h * 60); return Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m"; }
-function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+let toastT;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove("show"), 2000); }
+const quiet = (e) => { if (!["signed out", "offline"].includes(e.message)) toast(e.message); };
 
+/* ---------------- auth ---------------- */
 function showLogin() {
   clearInterval(timer); me = null;
-  $("app").classList.add("hidden"); $("nav").classList.add("hidden"); $("login").classList.remove("hidden");
+  $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+  setTimeout(() => $("u").focus(), 50);
 }
 function showApp() {
-  $("login").classList.add("hidden"); $("app").classList.remove("hidden"); $("nav").classList.remove("hidden");
-  $("navServer").classList.toggle("hidden", me.role !== "root");
+  $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+  $("tabServer").classList.toggle("hidden", me.role !== "root");
+  $("avatar").textContent = (me.username || "?")[0].toUpperCase();
   const h = new Date().getHours();
   $("greet").textContent = (h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening") + ", " + me.username;
-  refresh(); clearInterval(timer); timer = setInterval(refresh, 5000);
+  go(location.hash.slice(1) || "home", true);
+  clearInterval(timer); timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
 }
-
 $("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault(); $("loginErr").textContent = "";
-  try { const r = await api("login", {username: $("u").value, password: $("p").value});
-        me = r.user; $("p").value = ""; showApp(); }
-  catch (err) { $("loginErr").textContent = err.message; }
+  try { const r = await api("login", {username: $("u").value.trim(), password: $("p").value}); me = r.user; $("p").value = ""; showApp(); }
+  catch (err) { $("loginErr").textContent = err.message === "offline" ? "Can't reach CYPHER-X" : err.message; }
 });
-$("logout").onclick = async () => { await fetch("/api/logout"); showLogin(); };
+$("showPw").onclick = () => { const p = $("p"); p.type = p.type === "password" ? "text" : "password"; };
+$("logout").onclick = async () => { await fetch("/api/logout").catch(() => {}); showLogin(); };
+document.addEventListener("visibilitychange", () => { if (!document.hidden && me) refresh(); });
 
-document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
-  tab = b.dataset.tab;
-  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
-  document.querySelectorAll("section").forEach(s => s.classList.toggle("hidden", s.id !== "tab-" + tab));
+/* ---------------- navigation ---------------- */
+function go(name, initial) {
+  if (name === "server" && me.role !== "root") name = "home";
+  if (!$("v-" + name)) name = "home";
+  tab = name;
+  document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll("main .view").forEach(v => v.classList.toggle("hidden", v.id !== "v-" + name));
+  if (!initial) { history.replaceState(null, "", "#" + name); window.scrollTo({top: 0}); }
   refresh();
-});
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tap(); go(b.dataset.tab); });
+document.addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) go(g.dataset.go); });
+$("refreshBtn").onclick = () => { tap(); refresh(true); };
 
-async function refresh() {
+async function refresh(manual) {
+  if (busy) return; busy = true;
+  if (manual) $("refreshIc").classList.add("spin");
   try {
-    if (tab === "home" || tab === "security") renderStatus(await api("status"));
-    if (tab === "security") loadSnap();
+    const s = await api("status"); lastStatus = s; renderChrome(s);
+    if (tab === "home") renderHome(s);
+    if (tab === "devices") renderDevices(s);
+    if (tab === "security") { renderSecurity(s); if (manual || !$("camImg").src) loadCam(); }
     if (tab === "money") renderMoney(await api("bills"), await api("groceries"));
     if (tab === "server") renderServer(await api("server"));
-  } catch (e) { if (e.message !== "signed out") toast(e.message); }
+  } catch (e) { quiet(e); }
+  finally { busy = false; $("refreshIc").classList.remove("spin"); }
 }
 
-function renderStatus(s) {
-  cur = s.currency; $("when").textContent = s.time; $("tokAmount").placeholder = "Token " + cur;
-  const p = s.power, frac = p.load_w / Math.max(1, p.inverter_w);
-  $("load").textContent = Math.round(p.load_w).toLocaleString() + " W";
-  $("loadSub").textContent = Math.round(frac * 100) + "% of the " + p.inverter_w.toLocaleString() + " W inverter · " + money(p.per_hour) + "/h";
-  $("loadBar").style.width = Math.min(100, frac * 100) + "%";
-  $("loadBar").style.background = frac > .9 ? "var(--bad)" : frac > .7 ? "var(--warn)" : "var(--accent)";
-  $("bat").textContent = Math.round(p.battery_pct) + "%";
-  $("batSub").textContent = p.runtime_h ? "Runs this load " + hours(p.runtime_h) : "Nothing drawing power";
-  const g = s.grid;
-  $("grid").innerHTML = g.off_since ? '<span class="chip bad">Grid off</span>' :
-    g.watching ? '<span class="chip good">Grid on</span>' : '<span class="chip dim">Not watched</span>';
-  $("gridSub").textContent = g.off_since ? "Off for " + hours((Date.now() / 1000 - g.off_since) / 3600)
-    : "No grid " + hours(g.cuts_24h_h) + " in 24 h";
-  const m = s.meter;
-  $("meter").textContent = m.units_left == null ? "—" : m.units_left.toFixed(1) + " kWh";
-  $("meterSub").textContent = m.days_left == null ? "Add a reading below" :
-    "≈ " + hours(m.days_left * 24) + " left · " + m.kwh_per_day.toFixed(1) + " kWh/day";
-  $("devices").innerHTML = s.devices.map(d =>
-    `<div class="dev ${d.on ? "on" : ""}" data-id="${esc(d.id)}"><span class="st">${d.on ? "ON" : "OFF"}</span>
-     <b>${esc(d.name)}</b><span>${esc(d.room)} · ${d.watts} W</span></div>`).join("");
-  document.querySelectorAll(".dev").forEach(el => el.onclick = async () => {
-    el.classList.toggle("on");
-    try { await api("devices/" + encodeURIComponent(el.dataset.id) + "/toggle", {}); refresh(); }
-    catch (e) { toast(e.message); refresh(); }
-  });
+/* ---------------- header chips ---------------- */
+function renderChrome(s) {
+  cur = s.currency; $("when").textContent = s.time;
+  const g = s.grid, m = s.meter, p = s.power, sec = s.security, chips = [];
+  if (g.off_since) chips.push(["bad", "Grid off · " + hours((Date.now() / 1000 - g.off_since) / 3600)]);
+  else chips.push([g.watching ? "good" : "", g.watching ? "Grid on" : "Grid not watched"]);
+  chips.push([p.battery_pct < 20 ? "bad" : p.battery_pct < 40 ? "warn" : "good", "Battery " + Math.round(p.battery_pct) + "%"]);
+  if (m.days_left != null) chips.push([m.days_left < 2 ? "warn" : "", "Meter " + hours(m.days_left * 24)]);
+  chips.push([sec.armed ? "good" : "", sec.armed ? "Armed" : "Disarmed"]);
+  if (sec.motion_today) chips.push(["warn", sec.motion_today + " motion today"]);
+  $("chips").innerHTML = chips.map(([c, t]) => `<span class="chip ${c}"><span class="dot"></span>${esc(t)}</span>`).join("");
+}
+
+/* ---------------- home ---------------- */
+function renderHome(s) {
+  $("skel").classList.add("hidden"); $("homeBody").hidden = false;
+  const p = s.power, frac = Math.min(1, p.load_w / Math.max(1, p.inverter_w));
+  const ring = $("ringVal"); ring.style.strokeDashoffset = 326.7 * (1 - frac);
+  ring.style.stroke = frac > .9 ? "var(--bad)" : frac > .7 ? "var(--warn)" : "var(--accent)";
+  $("loadW").textContent = watts(p.load_w);
+  $("loadPct").textContent = Math.round(frac * 100) + "% of " + (p.inverter_w / 1000).toFixed(1).replace(".0", "") + " kW";
+  $("perHour").textContent = money(p.per_hour) + " / h";
+  $("battery").textContent = Math.round(p.battery_pct) + "%" + (p.runtime_h ? " · " + hours(p.runtime_h) : "");
+  $("perDay").textContent = money(p.per_day);
+  $("meterShort").textContent = s.meter.units_left == null ? "No reading" : s.meter.units_left.toFixed(1) + " kWh";
+  const armBtn = $("aArm"); armBtn.classList.toggle("on", s.security.armed);
+  armBtn.querySelector("span").textContent = s.security.armed ? "Armed" : "Arm";
+  const top = Math.max(1, ...s.rooms.map(r => r.load_w));
+  $("rooms").innerHTML = s.rooms.map(r => `<button class="card room" data-room="${esc(r.id)}" style="text-align:left">
+      <b>${esc(r.name)}</b><div class="w">${watts(r.load_w)}</div>
+      <div class="bar"><i style="width:${Math.max(r.load_w ? 6 : 0, r.load_w / top * 100)}%"></i></div></button>`).join("");
+  const on = s.devices.filter(d => d.on);
+  $("onNow").innerHTML = on.length ? on.map(d => `<div class="li">
+      <div class="tile on" style="all:unset"><span class="ico" style="width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:var(--good);color:#04140d">${icon(ICON[d.kind] || "plug", "sm")}</span></div>
+      <div class="grow"><b>${esc(d.name)}</b><small>${esc(d.room)}</small></div>
+      <span class="amt">${d.live_w != null ? `<span class="live">${watts(d.live_w)}</span>` : watts(d.watts)}</span></div>`).join("")
+    : `<div class="li"><div class="grow"><b>Everything is off</b><small>Nothing is drawing power</small></div></div>`;
+}
+document.addEventListener("click", (e) => { const r = e.target.closest("[data-room]"); if (r) { roomFilter = r.dataset.room; go("devices"); } });
+$("aAllOff").onclick = async () => { tap(); if (!confirm("Switch everything off? (The fridge stays on.)")) return;
+  try { await api("alloff", {}); toast("Everything off — fridge kept on"); refresh(); } catch (e) { quiet(e); } };
+$("aArm").onclick = () => toggleArm();
+$("aCam").onclick = () => { tap(); go("security"); };
+$("aMeter").onclick = () => { tap(); openSheet("reading"); };
+
+/* ---------------- devices ---------------- */
+function renderDevices(s) {
+  const rooms = [["all", "All"], ...s.rooms.map(r => [r.id, r.name])];
+  if (!rooms.some(r => r[0] === roomFilter)) roomFilter = "all";
+  $("filters").innerHTML = rooms.map(([id, n]) => `<button class="${id === roomFilter ? "active" : ""}" data-filter="${esc(id)}">${esc(n)}</button>`).join("");
+  const roomName = Object.fromEntries(s.rooms.map(r => [r.id, r.name]));
+  const list = s.devices.filter(d => roomFilter === "all" || d.room === roomName[roomFilter]);
+  $("tiles").innerHTML = list.map(d => {
+    const w = d.live_w != null ? `<span class="live">${watts(d.live_w)} live</span>` : `${watts(d.watts)}`;
+    return `<button class="tile ${d.on ? "on" : ""} ${pending.has(d.id) ? "pending" : ""}" data-dev="${esc(d.id)}" aria-pressed="${d.on}">
+      <div class="row"><span class="ico">${icon(ICON[d.kind] || "plug")}</span><span class="switch"></span></div>
+      <div><b>${esc(d.name)}</b><small>${esc(d.room)} · ${w}</small></div></button>`;
+  }).join("") || `<p class="muted">No appliances here.</p>`;
+  const on = s.devices.filter(d => d.on).length;
+  $("devHint").textContent = `${on} of ${s.devices.length} on · tap a tile to switch it`;
+}
+document.addEventListener("click", (e) => {
+  const f = e.target.closest("[data-filter]"); if (f) { tap(); roomFilter = f.dataset.filter; renderDevices(lastStatus); return; }
+  const t = e.target.closest("[data-dev]"); if (!t) return;
+  const id = t.dataset.dev; if (pending.has(id)) return;
+  tap(); pending.add(id); t.classList.toggle("on"); t.classList.add("pending");
+  api("devices/" + encodeURIComponent(id) + "/toggle", {})
+    .then(r => toast(t.querySelector("b").textContent + (r.on ? " on" : " off")))
+    .catch(quiet).finally(() => { pending.delete(id); refresh(); });
+});
+
+/* ---------------- security ---------------- */
+function renderSecurity(s) {
   const sec = s.security, live = sec.cameras.filter(c => c.live).length;
-  $("secSub").textContent = (sec.armed ? "Armed" : "Disarmed") + " · " + live + "/" + sec.cameras.length +
-    " cameras live · " + sec.motion_today + " motion today";
-  $("arm").textContent = sec.armed ? "Disarm" : "Arm";
-  $("arm").dataset.armed = sec.armed ? "1" : "";
+  $("armCard").classList.toggle("armed", sec.armed); $("armSwitch").classList.toggle("on", sec.armed);
+  $("armTitle").textContent = sec.armed ? "Armed" : "Disarmed";
+  $("armSub").textContent = (sec.armed ? "You'll get motion alerts" : "Tap to get motion alerts") + " · " + sec.motion_today + " motion today";
+  $("camList").innerHTML = sec.cameras.length ? sec.cameras.map(c => `<div class="li"><span class="ico">${icon("camera", "sm")}</span>
+      <div class="grow"><b>${esc(c.name)}</b><small>${c.live ? "Live" : "Off"}</small></div>
+      <span class="pill ${c.live ? "good" : "dim"}">${c.live ? "LIVE" : "OFF"}</span></div>`).join("")
+    : `<div class="li"><div class="grow"><b>No cameras yet</b><small>Add one in CYPHER-X → CCTV</small></div></div>`;
+  $("camBadge").hidden = !live; $("camBadge").textContent = live ? "● LIVE" : "";
+  if (sec.latest && !live) $("camWhen").textContent = `${sec.latest.camera} · ${ago(sec.latest.ts)}`;
 }
-$("alloff").onclick = async () => { try { await api("alloff", {}); toast("Everything off (fridge kept on)"); refresh(); }
-                                    catch (e) { toast(e.message); } };
-$("arm").onclick = async () => { const on = !$("arm").dataset.armed;
-  try { await api("arm", {on}); toast(on ? "Armed" : "Disarmed"); refresh(); } catch (e) { toast(e.message); } };
-$("saveReading").onclick = async () => {
-  try { await api("meter/reading", {units: parseFloat($("units").value)}); $("units").value = ""; toast("Reading saved"); refresh(); }
-  catch (e) { toast(e.message); } };
-$("saveToken").onclick = async () => {
-  try { await api("meter/token", {amount: parseFloat($("tokAmount").value), units: parseFloat($("tokUnits").value)});
-        $("tokAmount").value = $("tokUnits").value = ""; toast("Token added"); refresh(); }
-  catch (e) { toast(e.message); } };
-
-function loadSnap() {
-  const img = $("snap");
-  img.onerror = () => { img.removeAttribute("src"); $("snapSub").textContent = "No camera picture yet"; };
-  img.onload = () => { $("snapSub").textContent = "Updated " + new Date().toLocaleTimeString(); };
+$("armCard").onclick = () => toggleArm();
+async function toggleArm() {
+  tap(); const on = !(lastStatus && lastStatus.security.armed);
+  try { await api("arm", {on}); toast(on ? "Armed — motion alerts on" : "Disarmed"); refresh(); } catch (e) { quiet(e); }
+}
+function loadCam() {
+  const img = $("camImg");
+  img.onload = () => { $("camEmpty").classList.add("hidden"); if (lastStatus && lastStatus.security.cameras.some(c => c.live)) $("camWhen").textContent = "Updated " + new Date().toLocaleTimeString(); };
+  img.onerror = () => { img.removeAttribute("src"); $("camEmpty").classList.remove("hidden"); };
   img.src = "/api/snapshot.jpg?t=" + Date.now();
 }
-$("refreshSnap").onclick = loadSnap;
+$("camRefresh").onclick = () => { tap(); loadCam(); };
+$("camBox").onclick = () => loadCam();
 
+/* ---------------- money ---------------- */
 function renderMoney(b, g) {
   cur = b.currency;
   $("billsMonth").textContent = money(b.monthly);
-  $("billsSub").textContent = b.people > 1 ? money(b.per_person) + " each (" + b.people + ")" : b.count + " bills";
+  $("billsSub").textContent = b.people > 1 ? money(b.per_person) + " each · " + b.people + " people" : b.count + " bills";
   $("billsDue").textContent = money(b.due_this_month);
   $("billsPaid").textContent = b.paid + " of " + b.count + " paid";
-  $("billList").innerHTML = b.bills.map(x => `<li><span class="${x.paid ? "done" : ""}">${esc(x.name)}
-    ${x.overdue ? '<span class="chip bad">overdue</span>' : ""}</span><span>${money(x.amount)}</span></li>`).join("")
-    || '<li class="sub">No bills yet</li>';
-  if (!g.list) { $("groList").innerHTML = '<li class="sub">No shopping list yet</li>'; return; }
+  $("billList").innerHTML = b.bills.length ? b.bills.map(x => {
+    let pill = `<span class="pill dim">${esc(x.frequency)}</span>`;
+    if (x.paid) pill = `<span class="pill good">Paid</span>`;
+    else if (x.overdue) pill = `<span class="pill bad">Overdue</span>`;
+    else if (x.next_due) { const d = Math.round((new Date(x.next_due) - new Date(new Date().toDateString())) / 86400000);
+      pill = `<span class="pill ${d <= 3 ? "warn" : "dim"}">${d <= 0 ? "Today" : d === 1 ? "Tomorrow" : "In " + d + " d"}</span>`; }
+    return `<div class="li"><div class="grow"><b class="${x.paid ? "done-text" : ""}">${esc(x.name)}</b><small>${esc(x.frequency)}</small></div>
+      ${pill}<span class="amt">${money(x.amount)}</span></div>`; }).join("")
+    : `<div class="li"><div class="grow"><b>No bills yet</b><small>Add them in CYPHER-X → Bills</small></div></div>`;
+  if (!g.list) { $("groList").innerHTML = `<div class="li"><div class="grow"><b>No shopping list</b></div></div>`; return; }
+  const sm = g.summary;
   $("groTitle").textContent = g.list.name;
-  $("groSub").textContent = money(g.summary.total) + " total · " + money(g.summary.remaining) + " still to buy";
-  $("groList").innerHTML = g.items.map(i => `<li data-id="${i.id}" style="cursor:pointer">
-    <span class="${i.bought ? "done" : ""}">${i.bought ? "●" : "○"} ${esc(i.name)} × ${i.qty}</span>
-    <span>${money(i.total)}</span></li>`).join("") || '<li class="sub">Empty list</li>';
-  document.querySelectorAll("#groList li[data-id]").forEach(li => li.onclick = async () => {
-    try { await api("groceries/" + li.dataset.id + "/toggle", {}); refresh(); } catch (e) { toast(e.message); } });
+  $("groTotal").textContent = money(sm.total);
+  $("groSub").textContent = sm.budget ? `${money(sm.total)} of ${money(sm.budget)} budget` : `${sm.bought_count} of ${sm.count} in the basket`;
+  const frac = sm.budget ? sm.total / sm.budget : (sm.count ? sm.bought_count / sm.count : 0);
+  $("groBar").style.width = Math.min(100, frac * 100) + "%";
+  $("groBar").style.background = sm.budget && frac > 1 ? "var(--bad)" : "var(--accent)";
+  $("groList").innerHTML = g.items.length ? g.items.map(i => `<button class="li" data-gro="${i.id}" style="width:100%;text-align:left">
+      <span class="check ${i.bought ? "done" : ""}">${i.bought ? icon("check", "sm") : ""}</span>
+      <div class="grow"><b class="${i.bought ? "done-text" : ""}">${esc(i.name)}</b><small>× ${i.qty}</small></div>
+      <span class="amt ${i.bought ? "done-text" : ""}">${money(i.total)}</span></button>`).join("")
+    : `<div class="li"><div class="grow"><b>Empty list</b><small>Add items in CYPHER-X → Groceries</small></div></div>`;
+}
+document.addEventListener("click", async (e) => {
+  const g = e.target.closest("[data-gro]"); if (!g) return;
+  tap(); g.querySelector(".check").classList.toggle("done");
+  try { await api("groceries/" + g.dataset.gro + "/toggle", {}); refresh(); } catch (err) { quiet(err); }
+});
+
+/* ---------------- server ---------------- */
+function renderServer(s) {
+  const pct = (id, v) => { $(id).textContent = v != null ? Math.round(v) + "%" : "—";
+    const bar = $(id + "Bar"); bar.style.width = (v || 0) + "%"; bar.style.background = v > 90 ? "var(--bad)" : v > 75 ? "var(--warn)" : "var(--accent)"; };
+  pct("cpu", s.cpu); pct("ram", s.ram); pct("disk", s.disk);
+  $("up").textContent = s.uptime_h != null ? hours(s.uptime_h) : "—";
+  $("svcSum").textContent = `${s.summary.running} of ${s.summary.total} services running`;
+  const cls = {running: "good", failed: "bad", starting: "warn", stopped: "dim"};
+  $("svcList").innerHTML = s.services.map(x => `<div class="li"><div class="grow"><b>${esc(x.title)}</b>
+      <small>${x.status === "running" ? "up " + hours(x.uptime / 3600) : x.status}</small></div>
+      <span class="pill ${cls[x.status] || "dim"}">${esc(x.status)}</span></div>`).join("");
 }
 
-function renderServer(s) {
-  $("cpu").textContent = s.cpu != null ? Math.round(s.cpu) + "%" : "—";
-  $("ram").textContent = s.ram != null ? Math.round(s.ram) + "%" : "—";
-  $("disk").textContent = s.disk != null ? Math.round(s.disk) + "%" : "—";
-  $("up").textContent = s.uptime_h != null ? hours(s.uptime_h) : "—";
-  const cls = {running: "good", failed: "bad", starting: "warn", stopped: "dim"};
-  $("svcList").innerHTML = s.services.map(x => `<li><span>${esc(x.title)}</span>
-    <span class="chip ${cls[x.status] || "dim"}">${x.status}</span></li>`).join("");
-}
+/* ---------------- meter sheet ---------------- */
+let mode = "reading";
+function openSheet(m) { setMode(m); $("scrim").classList.add("open"); $("sheet").classList.add("open");
+  $("tokAmountLbl").textContent = "Amount paid (" + cur + ")";
+  setTimeout(() => (m === "reading" ? $("units") : $("tokAmount")).focus(), 260); }
+function closeSheet() { $("scrim").classList.remove("open"); $("sheet").classList.remove("open"); document.activeElement.blur(); }
+function setMode(m) { mode = m; document.querySelectorAll("#seg button").forEach(b => b.classList.toggle("active", b.dataset.mode === m));
+  $("fReading").classList.toggle("hidden", m !== "reading"); $("fToken").classList.toggle("hidden", m !== "token"); }
+document.querySelectorAll("#seg button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+$("scrim").onclick = closeSheet; $("sheetCancel").onclick = closeSheet;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+$("meterForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    if (mode === "reading") { await api("meter/reading", {units: parseFloat($("units").value)}); $("units").value = ""; toast("Meter reading saved"); }
+    else { await api("meter/token", {amount: parseFloat($("tokAmount").value), units: parseFloat($("tokUnits").value)});
+      $("tokAmount").value = $("tokUnits").value = ""; toast("Token added"); }
+    closeSheet(); refresh();
+  } catch (err) { quiet(err); }
+});
 
 api("me").then(r => { me = r.user; showApp(); }).catch(() => showLogin());
 </script>

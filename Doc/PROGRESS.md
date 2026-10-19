@@ -37,6 +37,7 @@ home's power system, cameras and (soon) smart plugs.
 | 6 | 19 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Server features (roadmap 1–5)** — service manager with watchdog and a Services page; **web dashboard** for phones on the Wi-Fi; **Telegram bot** (alerts + commands); **network watch** with a Wi-Fi Devices page and new-device alerts; **nightly backups** with restore |
 | 7 | 19 Oct | _same branch, not opened yet_ | **Smart device discovery** — finds Tuya / Smart Life plugs, sockets, bulbs and switches from their broadcasts (protocol 3.1 / 3.3 / 3.5), TP-Link Kasa, Shelly / ESPHome / Sonoff / HomeKit via mDNS, Shelly / Tasmota via HTTP; **Smart Devices** page to name devices and link each to its appliance |
 | 8 | 19 Oct | _same branch, not opened yet_ | **Smart plug control** — linked plugs switch for real from the app, 3D view, web dashboard and Telegram; live watts / volts read every 5 s replace the estimates; Tuya local keys by paste or **Import Tuya keys** from the Tuya cloud (once); drivers for Tuya (tinytuya), Shelly gen 1/2, Tasmota, TP-Link Kasa |
+| 9 | 19 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Phone dashboard redesign** — app-style web dashboard: bottom tab bar (side rail on tablets / PCs), power ring, quick actions, room cards, device tiles with switches and live watts, bottom sheet for meter readings / tokens, light & dark themes, offline banner, add-to-home-screen icon |
 
 ---
 

@@ -69,6 +69,8 @@ anything that crashes (5 s, 15 s, 60 s, then every 5 min).
 - **Web dashboard** — turn it on, then open `http://<this PC's IP>:8080` on a phone on the same Wi-Fi and sign in
   with your CYPHER-X account: live load, battery, grid, meter (add readings / tokens), tap-to-switch appliances,
   arm / disarm, the latest camera picture, bills and the shopping list; root also sees server stats and services.
+  It is built like a phone app (bottom tabs, device tiles, light / dark theme) and can be added to the home screen
+  (browser menu → *Add to Home screen*); on a tablet or PC the tabs move to a side rail.
   It won't start while admin still has the default password. Windows Firewall asks once — allow Private networks.
   Don't forward the port on your router.
 - **Telegram bot** — create a bot with @BotFather, paste the token, Start, press *Pair a chat* and send the code to

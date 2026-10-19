@@ -24,6 +24,13 @@ from app.server.services import ThreadService
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 SESSION_TTL = 12 * 3600
+# public files (no secrets): the page itself and what "Add to Home screen" needs
+STATIC_FILES = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
+    "/icon.svg": ("icon.svg", "image/svg+xml"),
+}
 COOKIE = "cx_session"
 MAX_BODY = 64 * 1024
 LOGIN_TRIES, LOGIN_LOCK_S = 5, 60
@@ -117,9 +124,10 @@ class WebApp:
         """Returns (status, content_type, payload_bytes, set_cookie or None)."""
         self.requests += 1
         try:
-            if method == "GET" and path in ("/", "/index.html"):
-                with open(os.path.join(STATIC_DIR, "index.html"), "rb") as f:
-                    return 200, "text/html; charset=utf-8", f.read(), None
+            if method == "GET" and path in STATIC_FILES:
+                name, ctype = STATIC_FILES[path]
+                with open(os.path.join(STATIC_DIR, name), "rb") as f:
+                    return 200, ctype, f.read(), None
             if path == "/api/login" and method == "POST":
                 return self._login(body, ip)
             user = self.sessions.get(token)
