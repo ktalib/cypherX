@@ -14,11 +14,12 @@ home's power system, cameras and (soon) smart plugs.
 |---|---|
 | Home network UI (Smart Home + Apps) | Built and merged |
 | Sign-in, roles, lock | Built and merged |
-| Server console with boot checks | Built — in review as [#5](https://github.com/ktalib/cypherX/pull/5) |
+| Server console with boot checks | Built and merged ([#5](https://github.com/ktalib/cypherX/pull/5)) |
+| Server features: services + watchdog, web dashboard, Telegram bot, network watch, backups | Built, pushed — **pull request not opened yet** |
 | Real hardware (smart plugs, inverter data) | Not started — waiting on hardware |
 | Tested on the Windows laptop | **Not yet** — everything so far was tested on a Linux cloud machine |
 
-**Codebase:** about 22,000 lines of Python (PySide6 / Qt), 33 unit tests (32 pass — see §5).
+**Codebase:** about 25,700 lines (Python / PySide6 + one HTML page for phones), 57 unit tests (56 pass — see §5).
 
 ---
 
@@ -30,7 +31,8 @@ home's power system, cameras and (soon) smart plugs.
 | 2 | 17 Oct | [#2](https://github.com/ktalib/cypherX/pull/2) | **CCTV** — live camera grid (PC webcam, USB, RTSP/HTTP network cameras), motion detection with sensitivity, snapshots, recording, arm/disarm alerts, auto-cleanup of old files |
 | 3 | 17 Oct | [#3](https://github.com/ktalib/cypherX/pull/3) | **Home Dashboard** — one-page overview: live load, battery, meter, energy cost, tap-to-switch appliances, load by room, 24 h grid timeline, meter trend, security card; adapts to window width |
 | 4 | 18 Oct | [#4](https://github.com/ktalib/cypherX/pull/4) | **Sign-in and roles** (admin/admin first run, root vs user, lock, account management), **sidebar regrouped** into Smart Home / Apps / Server, new **Bills** and **Groceries** apps |
-| 5 | 19 Oct | [#5](https://github.com/ktalib/cypherX/pull/5) (open) | **Server console** — Server button opens a boot screen with 8 real checks (launch, root access, system health, network, database, storage, updates, services), then a separate green server sidebar with a "Return to Home" button |
+| 5 | 19 Oct | [#5](https://github.com/ktalib/cypherX/pull/5) | **Server console** — Server button opens a boot screen with 8 real checks (launch, root access, system health, network, database, storage, updates, services), then a separate green server sidebar with a "Return to Home" button; this progress report |
+| 6 | 19 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Server features (roadmap 1–5)** — service manager with watchdog and a Services page; **web dashboard** for phones on the Wi-Fi; **Telegram bot** (alerts + commands); **network watch** with a Wi-Fi Devices page and new-device alerts; **nightly backups** with restore |
 
 ---
 
@@ -47,9 +49,26 @@ home's power system, cameras and (soon) smart plugs.
   **Groceries** (lists, budget, basket ticks, remembered prices), Clock & Calendar, App Launcher.
 
 ### Server console (root only)
-- Boot screen with real checks and a terminal log; warnings don't block, a failed root check does.
-- Overview (Command Center, My Computer, System Monitor, Network Monitor), Processes & automation,
-  Storage & files, Logs — the original PC tools, now separated from the home screens.
+- Boot screen with real checks (now 9, including backups) and a terminal log; warnings don't block, a failed
+  root check does.
+- Overview (Command Center, **Services**, My Computer, System Monitor, Network Monitor, **Wi-Fi Devices**),
+  Processes & automation, Storage & files, Logs.
+
+### Server features (services)
+Every background job runs as a service on the **Services** page: status, uptime, restarts, Start / Stop / Restart,
+start automatically, settings, actions and its own log. A **watchdog** restarts a crashed service after 5 s,
+15 s, 60 s, then every 5 min.
+
+| Service | What it does | On by default |
+|---|---|---|
+| Telemetry | CPU / RAM / disk / network samples for the monitors | Yes |
+| Grid watch | Power-cut detection through the laptop charger | If it was on before |
+| Camera monitoring | Runs every CCTV camera with motion detection | No |
+| Automation scheduler | Automation Center rules | Yes |
+| **Web dashboard** | `http://<server-ip>:8080` on any phone on the Wi-Fi — Home (load, battery, grid, meter, tap-to-switch, meter readings / tokens), Security (arm, camera picture), Money (bills, groceries), Server (root) | No — and it **won't start while admin has the default password** |
+| **Telegram bot** | Alerts: motion with photo, power cut / back, meter low, service restarts, new Wi-Fi devices, backup failures. Commands: `/status /devices /on /off /alloff /units /arm /disarm /snapshot`. Pair with a one-time code | No — needs a bot token from @BotFather |
+| **Network watch** | Finds every device on the Wi-Fi (IP, MAC, name, maker where certain), remembers them, alerts on new ones | No |
+| **Backups** | Nightly zip of the database and settings (optionally snapshots), keeps 7, restore in one click | Yes |
 
 ### Accounts and safety
 - Sign-in screen; passwords stored as salted PBKDF2 hashes; 5 wrong tries → 30 s lockout.
@@ -73,13 +92,18 @@ home's power system, cameras and (soon) smart plugs.
 
 ## 5. Testing
 
-- **Unit tests:** 33 (energy log 9, CCTV 7, accounts/bills/groceries 6, server checks 5, original 6).
-  32 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
+- **Unit tests:** 57 (energy log 9, CCTV 7, network watch + backups 7, accounts/bills/groceries 6, service
+  manager 6, Telegram 6, server checks 5, web dashboard 5, original 6). 56 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
   tests run on Linux (`C:\Windows` isn't an absolute path there).
 - **App checks:** each feature was run headless on a Linux cloud machine with sample data and screenshotted —
   layouts, navigation between Home and Server, sign-in, roles, lock, motion detection with synthetic frames.
+  The web dashboard was driven in a real browser (Chromium, phone size): sign-in, switching an appliance (the
+  desktop updated), a meter reading, all four tabs. Telegram was tested against a fake Telegram server
+  (this cloud machine can't reach the real one).
 - **Not tested yet (needs the Windows laptop):** real webcam, recording, RTSP streams, charger-based power-cut
-  detection, Windows notifications, the registry-based Startup Manager, everything at real screen sizes.
+  detection, Windows notifications, the registry-based Startup Manager, everything at real screen sizes, the web
+  dashboard from a real phone (Windows Firewall will ask once — allow Private networks), the real Telegram bot,
+  a network scan of the real Wi-Fi.
 
 Run the tests:
 
@@ -92,8 +116,9 @@ python -m unittest discover tests
 ## 6. Known issues and to-dos
 
 - **Change the default admin password** after the first sign-in (the app shows a reminder until you do).
-- **No password recovery** — if the only root password is lost, accounts can only be reset by deleting
-  `cyberops.db`, which also deletes tasks, notes, bills and groceries. Automatic backups (roadmap #5) will fix this.
+- **No password recovery** — if the only root password is lost, restore a backup from before the change
+  (Backups → Restore), or delete `cyberops.db` (loses tasks, notes, bills and groceries).
+- The web dashboard is plain HTTP on the home network (fine at home; don't forward port 8080 on the router).
 - The "Checking for updates" step only reports the installed version — there is no update server yet (roadmap #12).
 - The Command Center page is wider than the space at the default window size (pre-existing).
 - The repo still tracks downloaded wallpapers, old `__pycache__` files, `battery-report.html` and `qtawesome.whl`.
@@ -103,17 +128,11 @@ python -m unittest discover tests
 
 ## 7. Roadmap — real server features
 
-Proposed on 19 October; **waiting for a pick** of which to build first.
+Proposed on 19 October. **1–5 are built** (§3, "Server features"); the rest are next, in this order.
 
-### Top 5 (recommended order: 1 → 2 → 3)
-1. **Web dashboard on the home Wi-Fi** — open `http://<laptop-ip>:8080` on a phone, same accounts; dashboard,
-   switches, CCTV snapshots, meter tokens.
-2. **Telegram bot** — alerts (motion with snapshot, power cut / back, meter low, battery low, server down) and
-   commands (`/status`, `/snapshot`, `/alloff`, `/units`).
-3. **Service manager + watchdog** — web, CCTV, grid watch, scheduler, telemetry, backups; status, uptime,
-   start / stop / restart, auto-restart, per-service logs.
-4. **Network scanner + new-device alerts** — every device on the Wi-Fi (name, IP, MAC, maker); Tuya plug discovery.
-5. **Automatic backups** — nightly database / settings / snapshots, keep N copies, one-click restore.
+### Done
+1. ~~Web dashboard on the home Wi-Fi~~ 2. ~~Telegram bot~~ 3. ~~Service manager + watchdog~~
+4. ~~Network scanner + new-device alerts~~ 5. ~~Automatic backups~~
 
 ### Power-aware and local
 6. Power-saving mode on battery (slower telemetry, pause non-essential recording, delay backups).
@@ -131,8 +150,11 @@ Proposed on 19 October; **waiting for a pick** of which to build first.
 
 ## 8. Next steps
 
-1. Merge [#5](https://github.com/ktalib/cypherX/pull/5) (server console + this report).
-2. Run the app on the Windows laptop and check: webcam / CCTV, power-cut detection, notifications, layouts.
+1. Open and merge the pull request for the server features (item 6 in §2).
+2. On the Windows laptop: change the admin password, then turn on the Web dashboard and open it on a phone;
+   create a Telegram bot with @BotFather and pair it; run a network scan; check webcam / CCTV, power-cut
+   detection and notifications.
 3. Check the inverter's back panel for a data port.
-4. Pick roadmap features to build (suggested: 1, 2, 3).
-5. When the Tuya plugs arrive: pair them in the Smart Life app, get the local keys, then add plug support.
+4. Continue the roadmap: 6 (power-saving on battery), 7 (internet uptime + data bundle), 8 (status page).
+5. When the Tuya plugs arrive: Network watch will show them (Espressif); pair them in the Smart Life app,
+   get the local keys, then add plug support.

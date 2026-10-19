@@ -61,6 +61,26 @@ CYPHER-X is a modern, macOS / iOS Sonoma-inspired desktop operations hub and wid
 - Prices are remembered: type an item you've bought before and its last price is filled in. Copy a list to start next week's shop with the same items.
 - Spend by category; "Clear bought" removes ticked items.
 
+## Server features (Server → Services)
+
+All background jobs run as services with status, uptime, restarts, logs, settings and a watchdog that restarts
+anything that crashes (5 s, 15 s, 60 s, then every 5 min).
+
+- **Web dashboard** — turn it on, then open `http://<this PC's IP>:8080` on a phone on the same Wi-Fi and sign in
+  with your CYPHER-X account: live load, battery, grid, meter (add readings / tokens), tap-to-switch appliances,
+  arm / disarm, the latest camera picture, bills and the shopping list; root also sees server stats and services.
+  It won't start while admin still has the default password. Windows Firewall asks once — allow Private networks.
+  Don't forward the port on your router.
+- **Telegram bot** — create a bot with @BotFather, paste the token, Start, press *Pair a chat* and send the code to
+  the bot. Alerts: motion with the photo (when armed), power cut / back, meter running low, service restarts,
+  new Wi-Fi devices, failed backups. Commands: `/status /devices /on <name> /off <name> /alloff /units /arm
+  /disarm /snapshot`.
+- **Network watch** — the **Wi-Fi Devices** page lists every device on the network (IP, MAC, name, maker where
+  certain), lets you name and trust them, and alerts when an unknown device joins.
+- **Backups** — every night (default 02:30, or as soon as the PC is on), keeps the last 7, optional camera
+  snapshots, any folder (an external drive or a synced folder is safest). *Restore from a backup…* saves the
+  current state first and restarts CYPHER-X.
+
 ## Home Dashboard
 
 - One page for the whole smart home: a greeting with the home's status and quick actions (All off, Arm / Disarm, Bought token, 3D map).
