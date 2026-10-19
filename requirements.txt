@@ -1,3 +1,6 @@
 PySide6>=6.6.0
 psutil>=5.9.0
 send2trash>=1.8.0
+cryptography>=41.0     # reads Tuya / Smart Life discovery broadcasts (v3.3+)
+zeroconf>=0.130        # finds Shelly, ESPHome, Sonoff, HomeKit devices (mDNS)
+tinytuya>=1.13         # switches Tuya / Smart Life plugs and reads their watts (local)

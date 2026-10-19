@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>CYPHER-X Home</title>
+<style>
+  :root {
+    --bg: #070d14; --card: rgba(20, 30, 42, 0.82); --line: rgba(255,255,255,0.10);
+    --text: #f8fafc; --soft: #cbd5e1; --muted: #94a3b8; --dim: #64748b;
+    --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #f43f5e;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.4 -apple-system, "Segoe UI", Roboto, "Inter", sans-serif; }
+  body { background: radial-gradient(120% 60% at 20% 0%, #0f2a3a 0%, var(--bg) 60%) fixed; min-height: 100vh; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px 16px 96px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 4px 0 2px; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; }
+  .card h2 { margin: 0 0 6px; font-size: 10px; letter-spacing: 1.3px; text-transform: uppercase; color: var(--muted); font-weight: 800; }
+  .big { font-size: 24px; font-weight: 300; }
+  .wide { grid-column: 1 / -1; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    border: 1px solid; }
+  .chip.good { color: #d1fae5; background: rgba(16,185,129,.15); border-color: rgba(16,185,129,.5); }
+  .chip.bad { color: #ffe4e6; background: rgba(244,63,94,.15); border-color: rgba(244,63,94,.5); }
+  .chip.warn { color: #fef3c7; background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.5); }
+  .chip.dim { color: var(--soft); background: rgba(255,255,255,.06); border-color: var(--line); }
+  .bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; margin-top: 8px; }
+  .bar > i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+  .devices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .dev { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; background: rgba(255,255,255,.04);
+    cursor: pointer; user-select: none; transition: background .15s, border-color .15s; }
+  .dev.on { background: rgba(16,185,129,.14); border-color: rgba(16,185,129,.55); }
+  .dev b { display: block; font-size: 13px; }
+  .dev span { color: var(--muted); font-size: 11px; }
+  .dev .st { float: right; font-size: 10px; font-weight: 800; color: var(--dim); }
+  .dev.on .st { color: var(--good); }
+  button { font: inherit; border-radius: 999px; padding: 9px 16px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.07); color: var(--text); font-weight: 600; cursor: pointer; }
+  button.primary { background: var(--accent); color: #04131d; border: none; font-weight: 800; }
+  button:active { transform: scale(.98); }
+  input { font: inherit; width: 100%; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.06); color: var(--text); }
+  input:focus { outline: none; border-color: var(--accent); }
+  label { display: block; color: var(--muted); font-size: 12px; margin: 10px 0 4px; }
+  .snap { width: 100%; border-radius: 12px; background: #02060a; min-height: 160px; object-fit: contain; display: block; }
+  .list { margin: 0; padding: 0; list-style: none; }
+  .list li { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .list li:last-child { border-bottom: none; }
+  .list .done { color: var(--dim); text-decoration: line-through; }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(7, 13, 20, .92); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line); display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom); }
+  nav button { flex: 1; max-width: 190px; border: none; background: none; border-radius: 0; padding: 12px 0;
+    color: var(--muted); font-size: 12px; }
+  nav button.active { color: var(--accent); }
+  .login { max-width: 360px; margin: 12vh auto 0; }
+  .err { color: #fb7185; font-size: 12px; min-height: 18px; margin-top: 8px; }
+  .toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #0f172a;
+    border: 1px solid var(--line); padding: 8px 14px; border-radius: 999px; font-size: 12px; opacity: 0;
+    transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .hidden { display: none !important; }
+  @media (max-width: 380px) { .grid, .devices { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main id="login" class="login hidden">
+  <div class="card">
+    <h1>CYPHER-X</h1>
+    <div class="sub">Sign in with your CYPHER-X account</div>
+    <form id="loginForm">
+      <label for="u">User name</label><input id="u" autocomplete="username" required>
+      <label for="p">Password</label><input id="p" type="password" autocomplete="current-password" required>
+      <div class="err" id="loginErr"></div>
+      <button class="primary" style="width:100%" type="submit">Sign in</button>
+    </form>
+  </div>
+</main>
+
+<main id="app" class="hidden">
+  <div class="row" style="justify-content:space-between">
+    <div><h1 id="greet">Home</h1><div class="sub" id="when"></div></div>
+    <button id="logout" title="Sign out">Sign out</button>
+  </div>
+
+  <section id="tab-home">
+    <div class="grid">
+      <div class="card"><h2>Live load</h2><div class="big" id="load">—</div><div class="sub" id="loadSub"></div>
+        <div class="bar"><i id="loadBar" style="width:0"></i></div></div>
+      <div class="card"><h2>Battery</h2><div class="big" id="bat">—</div><div class="sub" id="batSub"></div></div>
+      <div class="card"><h2>Grid</h2><div id="grid">—</div><div class="sub" id="gridSub"></div></div>
+      <div class="card"><h2>Prepaid meter</h2><div class="big" id="meter">—</div><div class="sub" id="meterSub"></div></div>
+      <div class="card wide">
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0">Appliances</h2>
+          <button id="alloff">All off</button></div>
+        <div class="devices" id="devices" style="margin-top:10px"></div>
+      </div>
+      <div class="card wide">
+        <h2>Meter</h2>
+        <div class="row">
+          <input id="units" inputmode="decimal" placeholder="Units left on the meter">
+          <button id="saveReading">Save</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <input id="tokAmount" inputmode="decimal" placeholder="Token ₦">
+          <input id="tokUnits" inputmode="decimal" placeholder="kWh">
+          <button id="saveToken">Add</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-security" class="hidden">
+    <div class="grid">
+      <div class="card wide">
+        <div class="row" style="justify-content:space-between">
+          <div><h2 style="margin:0">Security</h2><div class="sub" id="secSub"></div></div>
+          <button id="arm" class="primary">Arm</button>
+        </div>
+      </div>
+      <div class="card wide">
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0">Camera</h2>
+          <button id="refreshSnap">Refresh</button></div>
+        <img id="snap" class="snap" alt="Latest camera picture" style="margin-top:10px">
+        <div class="sub" id="snapSub" style="margin-top:6px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-money" class="hidden">
+    <div class="grid">
+      <div class="card"><h2>Bills / month</h2><div class="big" id="billsMonth">—</div><div class="sub" id="billsSub"></div></div>
+      <div class="card"><h2>Due this month</h2><div class="big" id="billsDue">—</div><div class="sub" id="billsPaid"></div></div>
+      <div class="card wide"><h2>Bills</h2><ul class="list" id="billList"></ul></div>
+      <div class="card wide"><h2 id="groTitle">Groceries</h2><div class="sub" id="groSub"></div>
+        <ul class="list" id="groList" style="margin-top:6px"></ul></div>
+    </div>
+  </section>
+
+  <section id="tab-server" class="hidden">
+    <div class="grid">
+      <div class="card"><h2>CPU</h2><div class="big" id="cpu">—</div></div>
+      <div class="card"><h2>Memory</h2><div class="big" id="ram">—</div></div>
+      <div class="card"><h2>Disk</h2><div class="big" id="disk">—</div></div>
+      <div class="card"><h2>Uptime</h2><div class="big" id="up">—</div></div>
+      <div class="card wide"><h2>Services</h2><ul class="list" id="svcList"></ul></div>
+    </div>
+  </section>
+</main>
+
+<nav id="nav" class="hidden">
+  <button data-tab="home" class="active">Home</button>
+  <button data-tab="security">Security</button>
+  <button data-tab="money">Money</button>
+  <button data-tab="server" id="navServer" class="hidden">Server</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let me = null, tab = "home", cur = "₦", timer = null;
+
+async function api(path, body) {
+  const opts = body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"},
+                                          body: JSON.stringify(body)};
+  const r = await fetch("/api/" + path, opts);
+  if (r.status === 401 && path !== "login") { showLogin(); throw new Error("signed out"); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ("Error " + r.status));
+  return data;
+}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1800); }
+const money = (v) => cur + Math.round(v).toLocaleString();
+function hours(h) { if (h == null) return "—"; if (h >= 48) return (h / 24).toFixed(1) + " days";
+  const m = Math.round(h * 60); return Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m"; }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function showLogin() {
+  clearInterval(timer); me = null;
+  $("app").classList.add("hidden"); $("nav").classList.add("hidden"); $("login").classList.remove("hidden");
+}
+function showApp() {
+  $("login").classList.add("hidden"); $("app").classList.remove("hidden"); $("nav").classList.remove("hidden");
+  $("navServer").classList.toggle("hidden", me.role !== "root");
+  const h = new Date().getHours();
+  $("greet").textContent = (h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening") + ", " + me.username;
+  refresh(); clearInterval(timer); timer = setInterval(refresh, 5000);
+}
+
+$("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("loginErr").textContent = "";
+  try { const r = await api("login", {username: $("u").value, password: $("p").value});
+        me = r.user; $("p").value = ""; showApp(); }
+  catch (err) { $("loginErr").textContent = err.message; }
+});
+$("logout").onclick = async () => { await fetch("/api/logout"); showLogin(); };
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
+  document.querySelectorAll("section").forEach(s => s.classList.toggle("hidden", s.id !== "tab-" + tab));
+  refresh();
+});
+
+async function refresh() {
+  try {
+    if (tab === "home" || tab === "security") renderStatus(await api("status"));
+    if (tab === "security") loadSnap();
+    if (tab === "money") renderMoney(await api("bills"), await api("groceries"));
+    if (tab === "server") renderServer(await api("server"));
+  } catch (e) { if (e.message !== "signed out") toast(e.message); }
+}
+
+function renderStatus(s) {
+  cur = s.currency; $("when").textContent = s.time; $("tokAmount").placeholder = "Token " + cur;
+  const p = s.power, frac = p.load_w / Math.max(1, p.inverter_w);
+  $("load").textContent = Math.round(p.load_w).toLocaleString() + " W";
+  $("loadSub").textContent = Math.round(frac * 100) + "% of the " + p.inverter_w.toLocaleString() + " W inverter · " + money(p.per_hour) + "/h";
+  $("loadBar").style.width = Math.min(100, frac * 100) + "%";
+  $("loadBar").style.background = frac > .9 ? "var(--bad)" : frac > .7 ? "var(--warn)" : "var(--accent)";
+  $("bat").textContent = Math.round(p.battery_pct) + "%";
+  $("batSub").textContent = p.runtime_h ? "Runs this load " + hours(p.runtime_h) : "Nothing drawing power";
+  const g = s.grid;
+  $("grid").innerHTML = g.off_since ? '<span class="chip bad">Grid off</span>' :
+    g.watching ? '<span class="chip good">Grid on</span>' : '<span class="chip dim">Not watched</span>';
+  $("gridSub").textContent = g.off_since ? "Off for " + hours((Date.now() / 1000 - g.off_since) / 3600)
+    : "No grid " + hours(g.cuts_24h_h) + " in 24 h";
+  const m = s.meter;
+  $("meter").textContent = m.units_left == null ? "—" : m.units_left.toFixed(1) + " kWh";
+  $("meterSub").textContent = m.days_left == null ? "Add a reading below" :
+    "≈ " + hours(m.days_left * 24) + " left · " + m.kwh_per_day.toFixed(1) + " kWh/day";
+  $("devices").innerHTML = s.devices.map(d =>
+    `<div class="dev ${d.on ? "on" : ""}" data-id="${esc(d.id)}"><span class="st">${d.on ? "ON" : "OFF"}</span>
+     <b>${esc(d.name)}</b><span>${esc(d.room)} · ${d.watts} W</span></div>`).join("");
+  document.querySelectorAll(".dev").forEach(el => el.onclick = async () => {
+    el.classList.toggle("on");
+    try { await api("devices/" + encodeURIComponent(el.dataset.id) + "/toggle", {}); refresh(); }
+    catch (e) { toast(e.message); refresh(); }
+  });
+  const sec = s.security, live = sec.cameras.filter(c => c.live).length;
+  $("secSub").textContent = (sec.armed ? "Armed" : "Disarmed") + " · " + live + "/" + sec.cameras.length +
+    " cameras live · " + sec.motion_today + " motion today";
+  $("arm").textContent = sec.armed ? "Disarm" : "Arm";
+  $("arm").dataset.armed = sec.armed ? "1" : "";
+}
+$("alloff").onclick = async () => { try { await api("alloff", {}); toast("Everything off (fridge kept on)"); refresh(); }
+                                    catch (e) { toast(e.message); } };
+$("arm").onclick = async () => { const on = !$("arm").dataset.armed;
+  try { await api("arm", {on}); toast(on ? "Armed" : "Disarmed"); refresh(); } catch (e) { toast(e.message); } };
+$("saveReading").onclick = async () => {
+  try { await api("meter/reading", {units: parseFloat($("units").value)}); $("units").value = ""; toast("Reading saved"); refresh(); }
+  catch (e) { toast(e.message); } };
+$("saveToken").onclick = async () => {
+  try { await api("meter/token", {amount: parseFloat($("tokAmount").value), units: parseFloat($("tokUnits").value)});
+        $("tokAmount").value = $("tokUnits").value = ""; toast("Token added"); refresh(); }
+  catch (e) { toast(e.message); } };
+
+function loadSnap() {
+  const img = $("snap");
+  img.onerror = () => { img.removeAttribute("src"); $("snapSub").textContent = "No camera picture yet"; };
+  img.onload = () => { $("snapSub").textContent = "Updated " + new Date().toLocaleTimeString(); };
+  img.src = "/api/snapshot.jpg?t=" + Date.now();
+}
+$("refreshSnap").onclick = loadSnap;
+
+function renderMoney(b, g) {
+  cur = b.currency;
+  $("billsMonth").textContent = money(b.monthly);
+  $("billsSub").textContent = b.people > 1 ? money(b.per_person) + " each (" + b.people + ")" : b.count + " bills";
+  $("billsDue").textContent = money(b.due_this_month);
+  $("billsPaid").textContent = b.paid + " of " + b.count + " paid";
+  $("billList").innerHTML = b.bills.map(x => `<li><span class="${x.paid ? "done" : ""}">${esc(x.name)}
+    ${x.overdue ? '<span class="chip bad">overdue</span>' : ""}</span><span>${money(x.amount)}</span></li>`).join("")
+    || '<li class="sub">No bills yet</li>';
+  if (!g.list) { $("groList").innerHTML = '<li class="sub">No shopping list yet</li>'; return; }
+  $("groTitle").textContent = g.list.name;
+  $("groSub").textContent = money(g.summary.total) + " total · " + money(g.summary.remaining) + " still to buy";
+  $("groList").innerHTML = g.items.map(i => `<li data-id="${i.id}" style="cursor:pointer">
+    <span class="${i.bought ? "done" : ""}">${i.bought ? "●" : "○"} ${esc(i.name)} × ${i.qty}</span>
+    <span>${money(i.total)}</span></li>`).join("") || '<li class="sub">Empty list</li>';
+  document.querySelectorAll("#groList li[data-id]").forEach(li => li.onclick = async () => {
+    try { await api("groceries/" + li.dataset.id + "/toggle", {}); refresh(); } catch (e) { toast(e.message); } });
+}
+
+function renderServer(s) {
+  $("cpu").textContent = s.cpu != null ? Math.round(s.cpu) + "%" : "—";
+  $("ram").textContent = s.ram != null ? Math.round(s.ram) + "%" : "—";
+  $("disk").textContent = s.disk != null ? Math.round(s.disk) + "%" : "—";
+  $("up").textContent = s.uptime_h != null ? hours(s.uptime_h) : "—";
+  const cls = {running: "good", failed: "bad", starting: "warn", stopped: "dim"};
+  $("svcList").innerHTML = s.services.map(x => `<li><span>${esc(x.title)}</span>
+    <span class="chip ${cls[x.status] || "dim"}">${x.status}</span></li>`).join("");
+}
+
+api("me").then(r => { me = r.user; showApp(); }).catch(() => showLogin());
+</script>
+</body>
+</html>

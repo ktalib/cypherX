@@ -17,6 +17,19 @@ from app.navigation import (
     NavigationSidebar, MODULE_DEFINITIONS, MODULES, module_allowed, module_mode, HOME_MODE, SERVER_MODE
 )
 from app.views.server_boot import ServerBootView
+from app.views.services_view import ServicesView
+from app.server.services import ServiceManager, ManagedService
+from app.server.events import bus
+from app.server.bridge import GuiBridge
+from app.server.home_api import HomeApi
+from app.server.web import WebService
+from app.server.telegram import TelegramService
+from app.server.netwatch import NetWatchService
+from app.server.discovery import DiscoveryService
+from app.server.plugs import PlugService
+from app.views.smart_devices import SmartDevicesView
+from app.server.backup import BackupService, backup_check
+from app.views.lan_devices import LanDevicesView
 from app.services import server_checks
 from app.ui_polish import GlassBackdrop, polish_tables
 from app.views.settings import get_pref
@@ -153,6 +166,11 @@ class MainWindow(QMainWindow):
         self.view_settings = SettingsView(self)
         self.view_bills = BillsView(self)
         self.view_groceries = GroceriesView(self)
+        self.services = ServiceManager(Database.get_instance())
+        self._register_services()
+        self.view_services = ServicesView(self.services, self)
+        self.view_lan_devices = LanDevicesView(self.services, self)
+        self.view_smart_devices = SmartDevicesView(self.services, self.view_smart_home, self)
 
         # Map to stack in order of MODULE_DEFINITIONS
         self.view_map = {
@@ -175,6 +193,9 @@ class MainWindow(QMainWindow):
             "clock_calendar": self.view_clock_calendar,
             "notes_tasks": self.view_notes_tasks,
             "bills": self.view_bills,
+            "services": self.view_services,
+            "lan_devices": self.view_lan_devices,
+            "smart_devices": self.view_smart_devices,
             "groceries": self.view_groceries,
             "app_launcher": self.view_app_launcher,
             "automation_center": self.view_automation_center,
@@ -235,6 +256,7 @@ class MainWindow(QMainWindow):
 
     def quit_app(self):
         self.view_server_boot.stop()
+        self.services.stop_all()
         self._really_quit = True
         self.close()
 
@@ -323,6 +345,143 @@ class MainWindow(QMainWindow):
                 self.sidebar._on_module_clicked(idx, module_id)
                 break
 
+    # ------------------------------------------------------------ services --
+
+    def _register_services(self):
+        """Everything that runs in the background, under one manager and watchdog."""
+        cctv, home = self.view_cctv, self.view_smart_home
+        engine = self.view_automation_center.engine
+
+        def cams_start():
+            for f in cctv.feeds.values():
+                cctv.start_camera(f, log=False)
+
+        def cams_stop():
+            for f in list(cctv.feeds.values()):
+                if f.running:
+                    cctv.stop_camera(f)
+
+        def cams_info():
+            live = sum(1 for f in cctv.feeds.values() if f.running)
+            armed = "armed" if cctv.store.config.get("armed") else "disarmed"
+            return [f"{live} of {len(cctv.feeds)} cameras live · {armed}",
+                    f"{len(cctv.store.events)} events stored · files kept "
+                    f"{cctv.store.config.get('retention_days', 14)} days"]
+
+        def grid_info():
+            e = home.energy
+            out = e.open_outage()
+            import time as _t
+            return ["Grid OFF since " + _t.strftime("%H:%M", _t.localtime(out["start"])) if out else
+                    ("Grid on" if e.grid_detect else "Not watching"),
+                    f"{len(e.outages)} power cuts logged"]
+
+        self.services.register(ManagedService(
+            "telemetry", "Telemetry", "Samples CPU, RAM, disk and network for the monitors and side panel.",
+            "activity", lambda: self.metrics_timer.start(), lambda: self.metrics_timer.stop(),
+            lambda: hasattr(self, "metrics_timer") and self.metrics_timer.isActive(),
+            lambda: [f"Every {self.metrics_timer.interval() / 1000:g} s"] if hasattr(self, "metrics_timer") else [],
+            default_enabled=True))
+        self.services.register(ManagedService(
+            "grid_watch", "Grid watch", "Detects power cuts through the laptop charger (grid-only socket).",
+            "zap", lambda: home.grid_detect.setChecked(True), lambda: home.grid_detect.setChecked(False),
+            lambda: home.energy.grid_detect, grid_info, default_enabled=bool(home.energy.grid_detect)))
+        self.services.register(ManagedService(
+            "cameras", "Camera monitoring", "Runs every CCTV camera with motion detection.",
+            "video", cams_start, cams_stop, lambda: any(f.running for f in cctv.feeds.values()),
+            cams_info, default_enabled=False))
+        self.services.register(ManagedService(
+            "automations", "Automation scheduler", "Runs the Automation Center rules on schedule.",
+            "automation", lambda: engine._timer.start(60_000), lambda: engine._timer.stop(),
+            lambda: engine._timer.isActive(),
+            lambda: [f"{sum(1 for v in engine.enabled.values() if v)} rules enabled"], default_enabled=True))
+
+        # Remote access: everything goes through the GUI-thread bridge
+        if self.auth is None:
+            from app.services.auth_service import AuthService
+            self.auth = AuthService(Database.get_instance())
+        self.bridge = GuiBridge(self)
+        self.home_api = HomeApi(self, self.bridge)
+        self.services.register(WebService(self.auth, self.home_api))
+        self.services.register(TelegramService(self.home_api, bus))
+        netwatch = self.services.register(NetWatchService(bus))
+
+        def mark_on_wifi_list(dev):
+            # show what a device really is on the Wi-Fi Devices page
+            for mac, d in netwatch.book.devices.items():
+                if d.get("ip") == dev.get("ip"):
+                    d["smart"] = f"{dev['brand']} {dev['kind']}"
+        self.discovery = self.services.register(DiscoveryService(
+            bus, ip_source=lambda: [d["ip"] for m, d in netwatch.book.devices.items()
+                                    if netwatch.book.online(m) and d.get("ip")],
+            on_found=mark_on_wifi_list))
+        self.view_smart_home.smart_book = self.discovery.book
+
+        # Smart plugs follow the appliances, and report real state + watts back
+        self.plugs = self.services.register(PlugService(
+            self.discovery.book, lambda item, on, w: self.bridge.post(lambda: self._apply_plug(item, on, w))))
+        self.view_smart_home.model.switch_hook = lambda item, on: self.plugs.request(item, on)
+        self.backup_service = self.services.register(
+            BackupService(bus, extra_actions=[("Restore from a backup…", self._restore_backup)]))
+
+    def _restore_backup(self):
+        """Pick a backup, save the current state, restore, restart CYPHER-X."""
+        import sys
+        from PySide6.QtCore import QProcess
+        from PySide6.QtWidgets import QFileDialog
+        svc = self.backup_service
+        path, _ = QFileDialog.getOpenFileName(self, "Restore from a backup", str(svc.folder()),
+                                              "CYPHER-X backups (cypherx-backup-*.zip)")
+        if not path:
+            return None
+        try:
+            manifest = svc.bm.read_manifest(path)
+        except Exception as e:
+            raise RuntimeError(f"That file isn't a CYPHER-X backup ({e})")
+        from datetime import datetime
+        when = datetime.fromtimestamp(manifest["created"]).strftime("%a %d %b %Y %H:%M")
+        if QMessageBox.question(self, "Restore backup",
+                                f"Restore the backup from {when}?\n\nEverything changed since then is replaced. "
+                                "The current state is saved first as a 'pre-restore' backup, and CYPHER-X "
+                                "restarts.") != QMessageBox.Yes:
+            return None
+        svc.backup_now(tag="pre-restore")
+        svc.bm.restore(path)
+        Database.get_instance().log_operation("Backups", f"Restored backup from {when}", "Success")
+        QProcess.startDetached(sys.executable, sys.argv)
+        self.quit_app()
+        QApplication.quit()
+        return None
+
+    def _apply_plug(self, item_id, on, watts):
+        home = self.view_smart_home
+        before = home.model.live_w(item_id)
+        changed = home.model.apply_reading(item_id, on, watts)
+        moved = watts is not None and (before is None or abs(before - watts) >= 3)
+        if changed or moved:
+            home.refresh()
+
+    def _watchdog(self):
+        for sid in self.services.watchdog():
+            svc = self.services.get(sid)
+            bus.publish("service", "Service restarted", f"{svc.title} crashed and was restarted by the watchdog")
+        self._ticks = getattr(self, "_ticks", 0) + 1
+        if self._ticks % 200 == 1:                 # every ~10 min
+            self._check_meter_low()
+
+    def _check_meter_low(self):
+        """Once a day, warn when the prepaid meter has less than 2 days left."""
+        from datetime import date
+        e = self.view_smart_home.energy
+        days = e.days_left()
+        db = Database.get_instance()
+        if days is None or days >= 2 or db.get_setting("meter_low_alerted", "") == date.today().isoformat():
+            return
+        db.set_setting("meter_low_alerted", date.today().isoformat())
+        msg = f"About {days * 24:.0f} hours of units left ({e.units_left():.1f} kWh). Buy a token soon."
+        self.notify("Prepaid meter low", msg)
+        bus.publish("meter", "Prepaid meter low", msg)
+
     # -------------------------------------------------------------- server --
 
     def _build_server_banner(self):
@@ -374,15 +533,7 @@ class MainWindow(QMainWindow):
         self.view_server_boot.start(self._boot_steps())
 
     def _boot_steps(self):
-        # Gather what lives in Qt objects here, on the GUI thread; the checks run in a worker.
-        try:
-            with Database.get_instance()._get_connection() as conn:
-                automations = conn.execute("SELECT COUNT(*) FROM automations WHERE enabled = 1").fetchone()[0]
-        except Exception:
-            automations = 0
-        cams = len(self.view_cctv.store.cameras)
-        live = sum(1 for f in self.view_cctv.feeds.values() if f.running)
-        grid = bool(self.view_smart_home.energy.grid_detect)
+        # The checks run on a worker thread: hand them plain data, not Qt objects.
         user = dict(self.user)
         return [
             ("Launching server", server_checks.check_launch),
@@ -392,8 +543,17 @@ class MainWindow(QMainWindow):
             ("Connecting to database", lambda: server_checks.check_database(DB_PATH)),
             ("Checking storage", server_checks.check_storage),
             ("Checking for updates", lambda: server_checks.check_updates(APP_VERSION)),
-            ("Starting services", lambda: server_checks.check_services(automations, cams, live, grid)),
+            ("Checking backups", lambda: backup_check(self.backup_service)),
+            ("Starting services", self._services_step),
         ]
+
+    def _services_step(self):
+        # runs on the boot worker thread: only reads plain attributes
+        s = self.services.summary()
+        detail = f"{s['running']} of {s['total']} services running"
+        if s["failed"]:
+            return server_checks.WARN, detail + " · failed: " + ", ".join(s["failed_titles"])
+        return server_checks.OK, detail + " · watchdog on"
 
     def _server_ready(self, results):
         warns = sum(1 for r in results if r[1] in (server_checks.WARN, server_checks.FAIL))
@@ -459,6 +619,13 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
+    def _start_services(self):
+        self.services.start_enabled()
+        self._watchdog_timer = QTimer(self)
+        self._watchdog_timer.timeout.connect(self._watchdog)
+        self._watchdog_timer.start(3000)
+        self._watchdog()
+
     def _setup_telemetry_loop(self):
         # Immediate sample
         self._sample_telemetry()
@@ -467,6 +634,7 @@ class MainWindow(QMainWindow):
         self.metrics_timer = QTimer(self)
         self.metrics_timer.timeout.connect(self._sample_telemetry)
         self.metrics_timer.start(int(get_pref("pref_rate") or DEFAULT_METRICS_INTERVAL_MS))
+        QTimer.singleShot(1500, self._start_services)
 
     def _sample_telemetry(self):
         try:

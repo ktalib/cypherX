@@ -33,6 +33,7 @@ from app.database import Database
 from app.home3d.model import HomeModel, HOME_FILE
 from app.home3d.view3d import House3DView
 from app.home3d.energy import EnergyLog, read_grid_from_charger
+from app.server.events import bus
 from app.widgets.home.common import make_menu, hicon
 
 
@@ -189,6 +190,7 @@ class SmartHomeView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.model = HomeModel()
+        self.smart_book = None          # set by the main window (smart device discovery)
         self.energy = EnergyLog()
         self.db = Database.get_instance()
         self._setup_ui()
@@ -506,9 +508,12 @@ class SmartHomeView(QWidget):
                 "rgba(255,255,255,0.14);border-radius:12px;font-size:10px;font-weight:800;padding:0;}")
             sw.clicked.connect(lambda _=False, i=d["id"]: self._toggle(i))
             name = QLabel(f"{d['name']}<br><span style='color:#64748b;font-size:10px'>"
-                          f"{names.get(d['room'], '')} · {dev['hours']:g} h/day</span>")
+                          f"{names.get(d['room'], '')} · {dev['hours']:g} h/day"
+                          f"{' · smart plug linked' if self.smart_book and self.smart_book.by_item(d['id']) else ''}"
+                          "</span>")
             name.setStyleSheet("color:#e2e8f0;font-size:12px;font-weight:600;background:transparent;")
-            watts = QPushButton(f"{dev['watts']:g} W")
+            live = m.live_w(d["id"])
+            watts = QPushButton(f"{live:.0f} W live" if live is not None else f"{dev['watts']:g} W")
             watts.setCursor(Qt.PointingHandCursor)
             watts.setToolTip("Edit, or remove this appliance")
             watts.setStyleSheet("QPushButton{background:transparent;border:none;color:#7fd4ff;"
@@ -727,6 +732,9 @@ class SmartHomeView(QWidget):
         if change == "off":
             self._log("Power cut: grid went off (laptop charger lost power)")
             self._notify("Power cut", "Grid is off — running on the inverter.")
+            rt = self.model.runtime_hours()
+            bus.publish("power", "Power cut", "Grid is off — running on the inverter."
+                        + (f" Battery lasts about {_fmt_hours(rt)} at the current load." if rt else ""))
             if pw.get("source") == "Grid":
                 self.source.setCurrentText("Inverter (battery)")
         else:
@@ -734,6 +742,7 @@ class SmartHomeView(QWidget):
             dur = _fmt_hours((o["end"] - o["start"]) / 3600)
             self._log(f"Grid restored after {dur}")
             self._notify("Grid restored", f"Power is back after {dur}.")
+            bus.publish("power", "Grid restored", f"Power is back after {dur}.")
             if pw.get("source") == "Inverter (battery)":
                 self.source.setCurrentText("Grid")
         self.refresh()
@@ -806,7 +815,9 @@ class SmartHomeView(QWidget):
         m.exec(QCursor.pos())
 
     def _reload(self):
+        hook = self.model.switch_hook
         self.model = HomeModel()
+        self.model.switch_hook = hook
         self.view.model = self.model
         self.view.reset_camera()
         self.refresh()

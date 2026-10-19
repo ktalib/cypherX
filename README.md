@@ -61,6 +61,48 @@ CYPHER-X is a modern, macOS / iOS Sonoma-inspired desktop operations hub and wid
 - Prices are remembered: type an item you've bought before and its last price is filled in. Copy a list to start next week's shop with the same items.
 - Spend by category; "Clear bought" removes ticked items.
 
+## Server features (Server → Services)
+
+All background jobs run as services with status, uptime, restarts, logs, settings and a watchdog that restarts
+anything that crashes (5 s, 15 s, 60 s, then every 5 min).
+
+- **Web dashboard** — turn it on, then open `http://<this PC's IP>:8080` on a phone on the same Wi-Fi and sign in
+  with your CYPHER-X account: live load, battery, grid, meter (add readings / tokens), tap-to-switch appliances,
+  arm / disarm, the latest camera picture, bills and the shopping list; root also sees server stats and services.
+  It won't start while admin still has the default password. Windows Firewall asks once — allow Private networks.
+  Don't forward the port on your router.
+- **Telegram bot** — create a bot with @BotFather, paste the token, Start, press *Pair a chat* and send the code to
+  the bot. Alerts: motion with the photo (when armed), power cut / back, meter running low, service restarts,
+  new Wi-Fi devices, failed backups. Commands: `/status /devices /on <name> /off <name> /alloff /units /arm
+  /disarm /snapshot`.
+- **Network watch** — the **Wi-Fi Devices** page lists every device on the network (IP, MAC, name, maker where
+  certain), lets you name and trust them, and alerts when an unknown device joins.
+- **Backups** — every night (default 02:30, or as soon as the PC is on), keeps the last 7, optional camera
+  snapshots, any folder (an external drive or a synced folder is safest). *Restore from a backup…* saves the
+  current state first and restarts CYPHER-X.
+
+## Smart Devices (auto-discovery)
+
+The **Smart Devices** page (Smart Home group) finds smart plugs, sockets, bulbs and switches on the Wi-Fi by
+themselves — press **Start discovery**:
+
+- **Tuya / Smart Life** (most plugs sold locally, including the Tuya 20A plugs): listens for the broadcasts every
+  Tuya device sends on UDP 6666 / 6667 (protocol 3.1, 3.3 and 3.4/3.5). Found within ~10 s, no cloud needed.
+- **TP-Link Kasa**: UDP 9999 discovery. **Shelly, ESPHome, Sonoff DIY, HomeKit, Google Cast, Hue, WLED**: mDNS.
+  **Shelly / Tasmota**: checked on devices from the Wi-Fi scan.
+- Name each device and pick the appliance plugged into it (one plug per appliance); the Smart Home list shows
+  "smart plug linked". New devices raise an alert (tray + Telegram) and are labelled on the Wi-Fi Devices page.
+- Requirements: pair the device in its own app first, keep it on the same 2.4 GHz Wi-Fi as the PC (not a guest
+  network), allow CYPHER-X through Windows Firewall on Private networks. `cryptography` and `zeroconf` (in
+  requirements.txt) enable Tuya 3.3+ and mDNS.
+- **Control + live power**: a linked plug is switched for real whenever its appliance is switched — in the app,
+  the 3D view, the web dashboard or Telegram — and the *Smart plug control* service reads it every 5 s. Measured
+  watts replace the rated watts in the live load, battery runtime and cost (shown as "146 W live").
+  - Shelly, Tasmota and TP-Link Kasa work straight away (no key).
+  - Tuya / Smart Life needs each plug's **local key**: press **Import Tuya keys…** (one-time, free Tuya IoT
+    developer account linked to your Smart Life app — the dialog walks you through it), or paste a key with
+    *Set local key…*. Keys for plugs not seen yet are kept and applied when they show up. Needs `tinytuya`.
+
 ## Home Dashboard
 
 - One page for the whole smart home: a greeting with the home's status and quick actions (All off, Arm / Disarm, Bought token, 3D map).

@@ -17,13 +17,16 @@ MODULES = {
     "smart_home": ("Smart Home", "home", "3D home & power system"),
     "cctv": ("CCTV", "video", "Security cameras & motion alerts"),
     "widget_screen": ("Widget Screen", "widgets", "Live liquid glass desktop & lock widgets"),
+    "smart_devices": ("Smart Devices", "plug", "Smart plugs, sockets, bulbs & switches found on the Wi-Fi"),
     "notes_tasks": ("Notes & Tasks", "notes", "Notes and to-dos"),
     "bills": ("Bills", "file_text", "Household bills, due dates & split"),
     "groceries": ("Groceries", "check_square", "Shopping lists with prices & budget"),
     "clock_calendar": ("Clock & Calendar", "clock", "World clocks, timer, alarms"),
     "app_launcher": ("App Launcher", "launcher", "Fast executable shortcuts"),
     "dashboard": ("Command Center", "dashboard", "Main operations telemetry hub"),
+    "services": ("Services", "layers", "Background services, watchdog & logs"),
     "my_computer": ("My Computer", "computer", "System overview & hardware"),
+    "lan_devices": ("Wi-Fi Devices", "wifi", "Every device on the home network"),
     "system_monitor": ("System Monitor", "system_monitor", "Live CPU, RAM & Disk charts"),
     "network_monitor": ("Network Monitor", "network_monitor", "Interface & bandwidth stats"),
     "process_manager": ("Process Manager", "process_manager", "Task & PID controller"),
@@ -42,14 +45,14 @@ MODULES = {
 # Home network sidebar: collapsible groups (group_id, title, icon, collapsed_by_default, module_ids)
 NAV_GROUPS = [
     ("smart_home", "Smart Home", "home", False,
-     ["smart_dashboard", "smart_home", "cctv", "widget_screen"]),
+     ["smart_dashboard", "smart_home", "smart_devices", "cctv", "widget_screen"]),
     ("apps", "Apps", "widgets", False,
      ["notes_tasks", "bills", "groceries", "clock_calendar", "app_launcher"]),
 ]
 
 # Server console sidebar (the PC the smart home runs on): sections (title, module_ids). Root only.
 SERVER_SECTIONS = [
-    ("Overview", ["dashboard", "my_computer", "system_monitor", "network_monitor"]),
+    ("Overview", ["dashboard", "services", "my_computer", "system_monitor", "network_monitor", "lan_devices"]),
     ("Processes & automation", ["process_manager", "startup_manager", "automation_center"]),
     ("Storage & files", ["disk_analyzer", "disk_cleaner", "file_explorer", "folder_organizer",
                          "duplicate_finder", "large_file_finder"]),
