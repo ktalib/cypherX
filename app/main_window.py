@@ -20,6 +20,9 @@ from app.views.server_boot import ServerBootView
 from app.views.services_view import ServicesView
 from app.server.services import ServiceManager, ManagedService
 from app.server.events import bus
+from app.server.bridge import GuiBridge
+from app.server.home_api import HomeApi
+from app.server.web import WebService
 from app.services import server_checks
 from app.ui_polish import GlassBackdrop, polish_tables
 from app.views.settings import get_pref
@@ -381,6 +384,14 @@ class MainWindow(QMainWindow):
             "automation", lambda: engine._timer.start(60_000), lambda: engine._timer.stop(),
             lambda: engine._timer.isActive(),
             lambda: [f"{sum(1 for v in engine.enabled.values() if v)} rules enabled"], default_enabled=True))
+
+        # Remote access: everything goes through the GUI-thread bridge
+        if self.auth is None:
+            from app.services.auth_service import AuthService
+            self.auth = AuthService(Database.get_instance())
+        self.bridge = GuiBridge(self)
+        self.home_api = HomeApi(self, self.bridge)
+        self.services.register(WebService(self.auth, self.home_api))
 
     def _watchdog(self):
         for sid in self.services.watchdog():
