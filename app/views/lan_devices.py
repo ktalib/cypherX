@@ -122,7 +122,7 @@ class LanDevicesView(QWidget):
                 name.setForeground(QColor(AMBER))
                 name.setToolTip("Not trusted yet — is this one of yours?")
             cells = [dot, name, QTableWidgetItem(d.get("ip", "")), QTableWidgetItem(mac),
-                     QTableWidgetItem(d.get("vendor", "")), QTableWidgetItem(_ago(d.get("last_seen"))),
+                     QTableWidgetItem(d.get("smart") or d.get("vendor", "")), QTableWidgetItem(_ago(d.get("last_seen"))),
                      QTableWidgetItem("Yes" if d.get("trusted") else "No")]
             for c, item in enumerate(cells):
                 if c != 1:

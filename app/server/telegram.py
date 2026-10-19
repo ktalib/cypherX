@@ -30,7 +30,8 @@ API = "https://api.telegram.org/bot{token}/{method}"
 POLL_TIMEOUT = 20
 PAIR_TTL = 600
 ALERT_KINDS = {"motion": "alert_motion", "power": "alert_power", "meter": "alert_meter",
-               "service": "alert_system", "network": "alert_system", "backup": "alert_system"}
+               "service": "alert_system", "network": "alert_system", "backup": "alert_system",
+               "smart": "alert_system"}
 
 
 class TelegramError(Exception):

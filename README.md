@@ -81,6 +81,22 @@ anything that crashes (5 s, 15 s, 60 s, then every 5 min).
   snapshots, any folder (an external drive or a synced folder is safest). *Restore from a backup…* saves the
   current state first and restarts CYPHER-X.
 
+## Smart Devices (auto-discovery)
+
+The **Smart Devices** page (Smart Home group) finds smart plugs, sockets, bulbs and switches on the Wi-Fi by
+themselves — press **Start discovery**:
+
+- **Tuya / Smart Life** (most plugs sold locally, including the Tuya 20A plugs): listens for the broadcasts every
+  Tuya device sends on UDP 6666 / 6667 (protocol 3.1, 3.3 and 3.4/3.5). Found within ~10 s, no cloud needed.
+- **TP-Link Kasa**: UDP 9999 discovery. **Shelly, ESPHome, Sonoff DIY, HomeKit, Google Cast, Hue, WLED**: mDNS.
+  **Shelly / Tasmota**: checked on devices from the Wi-Fi scan.
+- Name each device and pick the appliance plugged into it (one plug per appliance); the Smart Home list shows
+  "smart plug linked". New devices raise an alert (tray + Telegram) and are labelled on the Wi-Fi Devices page.
+- Requirements: pair the device in its own app first, keep it on the same 2.4 GHz Wi-Fi as the PC (not a guest
+  network), allow CYPHER-X through Windows Firewall on Private networks. `cryptography` and `zeroconf` (in
+  requirements.txt) enable Tuya 3.3+ and mDNS.
+- Next step: control and live watts — Tuya needs each device's local key, fetched once.
+
 ## Home Dashboard
 
 - One page for the whole smart home: a greeting with the home's status and quick actions (All off, Arm / Disarm, Bought token, 3D map).

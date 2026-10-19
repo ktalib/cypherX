@@ -190,6 +190,7 @@ class SmartHomeView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.model = HomeModel()
+        self.smart_book = None          # set by the main window (smart device discovery)
         self.energy = EnergyLog()
         self.db = Database.get_instance()
         self._setup_ui()
@@ -507,7 +508,9 @@ class SmartHomeView(QWidget):
                 "rgba(255,255,255,0.14);border-radius:12px;font-size:10px;font-weight:800;padding:0;}")
             sw.clicked.connect(lambda _=False, i=d["id"]: self._toggle(i))
             name = QLabel(f"{d['name']}<br><span style='color:#64748b;font-size:10px'>"
-                          f"{names.get(d['room'], '')} · {dev['hours']:g} h/day</span>")
+                          f"{names.get(d['room'], '')} · {dev['hours']:g} h/day"
+                          f"{' · smart plug linked' if self.smart_book and self.smart_book.by_item(d['id']) else ''}"
+                          "</span>")
             name.setStyleSheet("color:#e2e8f0;font-size:12px;font-weight:600;background:transparent;")
             watts = QPushButton(f"{dev['watts']:g} W")
             watts.setCursor(Qt.PointingHandCursor)

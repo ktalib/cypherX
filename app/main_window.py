@@ -25,6 +25,8 @@ from app.server.home_api import HomeApi
 from app.server.web import WebService
 from app.server.telegram import TelegramService
 from app.server.netwatch import NetWatchService
+from app.server.discovery import DiscoveryService
+from app.views.smart_devices import SmartDevicesView
 from app.server.backup import BackupService, backup_check
 from app.views.lan_devices import LanDevicesView
 from app.services import server_checks
@@ -167,6 +169,7 @@ class MainWindow(QMainWindow):
         self._register_services()
         self.view_services = ServicesView(self.services, self)
         self.view_lan_devices = LanDevicesView(self.services, self)
+        self.view_smart_devices = SmartDevicesView(self.services, self.view_smart_home, self)
 
         # Map to stack in order of MODULE_DEFINITIONS
         self.view_map = {
@@ -191,6 +194,7 @@ class MainWindow(QMainWindow):
             "bills": self.view_bills,
             "services": self.view_services,
             "lan_devices": self.view_lan_devices,
+            "smart_devices": self.view_smart_devices,
             "groceries": self.view_groceries,
             "app_launcher": self.view_app_launcher,
             "automation_center": self.view_automation_center,
@@ -399,7 +403,18 @@ class MainWindow(QMainWindow):
         self.home_api = HomeApi(self, self.bridge)
         self.services.register(WebService(self.auth, self.home_api))
         self.services.register(TelegramService(self.home_api, bus))
-        self.services.register(NetWatchService(bus))
+        netwatch = self.services.register(NetWatchService(bus))
+
+        def mark_on_wifi_list(dev):
+            # show what a device really is on the Wi-Fi Devices page
+            for mac, d in netwatch.book.devices.items():
+                if d.get("ip") == dev.get("ip"):
+                    d["smart"] = f"{dev['brand']} {dev['kind']}"
+        self.discovery = self.services.register(DiscoveryService(
+            bus, ip_source=lambda: [d["ip"] for m, d in netwatch.book.devices.items()
+                                    if netwatch.book.online(m) and d.get("ip")],
+            on_found=mark_on_wifi_list))
+        self.view_smart_home.smart_book = self.discovery.book
         self.backup_service = self.services.register(
             BackupService(bus, extra_actions=[("Restore from a backup…", self._restore_backup)]))
 

@@ -16,10 +16,12 @@ home's power system, cameras and (soon) smart plugs.
 | Sign-in, roles, lock | Built and merged |
 | Server console with boot checks | Built and merged ([#5](https://github.com/ktalib/cypherX/pull/5)) |
 | Server features: services + watchdog, web dashboard, Telegram bot, network watch, backups | Built, pushed — **pull request not opened yet** |
-| Real hardware (smart plugs, inverter data) | Not started — waiting on hardware |
+| Smart device discovery (Tuya, Kasa, Shelly, Tasmota, mDNS) + Smart Devices page | Built, pushed — pull request not opened yet |
+| Smart plug control + live watts | Next — needs the plugs (Tuya local keys) |
+| Inverter data | Waiting — check the back panel for a data port |
 | Tested on the Windows laptop | **Not yet** — everything so far was tested on a Linux cloud machine |
 
-**Codebase:** about 25,700 lines (Python / PySide6 + one HTML page for phones), 57 unit tests (56 pass — see §5).
+**Codebase:** about 26,800 lines (Python / PySide6 + one HTML page for phones), 66 unit tests (65 pass — see §5).
 
 ---
 
@@ -33,6 +35,7 @@ home's power system, cameras and (soon) smart plugs.
 | 4 | 18 Oct | [#4](https://github.com/ktalib/cypherX/pull/4) | **Sign-in and roles** (admin/admin first run, root vs user, lock, account management), **sidebar regrouped** into Smart Home / Apps / Server, new **Bills** and **Groceries** apps |
 | 5 | 19 Oct | [#5](https://github.com/ktalib/cypherX/pull/5) | **Server console** — Server button opens a boot screen with 8 real checks (launch, root access, system health, network, database, storage, updates, services), then a separate green server sidebar with a "Return to Home" button; this progress report |
 | 6 | 19 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Server features (roadmap 1–5)** — service manager with watchdog and a Services page; **web dashboard** for phones on the Wi-Fi; **Telegram bot** (alerts + commands); **network watch** with a Wi-Fi Devices page and new-device alerts; **nightly backups** with restore |
+| 7 | 19 Oct | _same branch, not opened yet_ | **Smart device discovery** — finds Tuya / Smart Life plugs, sockets, bulbs and switches from their broadcasts (protocol 3.1 / 3.3 / 3.5), TP-Link Kasa, Shelly / ESPHome / Sonoff / HomeKit via mDNS, Shelly / Tasmota via HTTP; **Smart Devices** page to name devices and link each to its appliance |
 
 ---
 
@@ -81,7 +84,7 @@ start automatically, settings, actions and its own log. A **watchdog** restarts 
 
 | Device | Can the app read it? | Plan |
 |---|---|---|
-| Tuya 20A smart plugs (being bought) | **Yes** — local Wi-Fi control + live watts via `tinytuya` | Next hardware step: link each plug to its appliance in the 3D view |
+| Tuya 20A smart plugs (being bought) | **Discovery built** — found automatically from their Wi-Fi broadcasts; control + live watts need each plug's local key | When they arrive: pair in Smart Life → they appear on Smart Devices → link to appliances → next build: local-key wizard + control |
 | Ikeja Electric prepaid meter (split meter) | No data port | Manual tracker built (tokens + readings). Optional: Tuya clamp meter fitted by an electrician after the meter |
 | Solar charge controller (PWM) | Probably no data port | Manual battery readings built. Optional: Bluetooth battery monitor (shunt) |
 | Invertek Mega+ inverter | Unknown | **Open question:** check the back panel for a USB / RS232 / RJ45 "COM" port |
@@ -92,14 +95,15 @@ start automatically, settings, actions and its own log. A **watchdog** restarts 
 
 ## 5. Testing
 
-- **Unit tests:** 57 (energy log 9, CCTV 7, network watch + backups 7, accounts/bills/groceries 6, service
-  manager 6, Telegram 6, server checks 5, web dashboard 5, original 6). 56 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
+- **Unit tests:** 66 (energy log 9, smart device discovery 9, CCTV 7, network watch + backups 7,
+  accounts/bills/groceries 6, service manager 6, Telegram 6, server checks 5, web dashboard 5, original 6). 65 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
   tests run on Linux (`C:\Windows` isn't an absolute path there).
 - **App checks:** each feature was run headless on a Linux cloud machine with sample data and screenshotted —
   layouts, navigation between Home and Server, sign-in, roles, lock, motion detection with synthetic frames.
   The web dashboard was driven in a real browser (Chromium, phone size): sign-in, switching an appliance (the
   desktop updated), a meter reading, all four tabs. Telegram was tested against a fake Telegram server
-  (this cloud machine can't reach the real one).
+  (this cloud machine can't reach the real one). Smart device discovery was tested with hand-built Tuya
+  broadcasts (all three formats) sent to the real UDP ports, and a fake Kasa plug answering on UDP.
 - **Not tested yet (needs the Windows laptop):** real webcam, recording, RTSP streams, charger-based power-cut
   detection, Windows notifications, the registry-based Startup Manager, everything at real screen sizes, the web
   dashboard from a real phone (Windows Firewall will ask once — allow Private networks), the real Telegram bot,
@@ -155,6 +159,6 @@ Proposed on 19 October. **1–5 are built** (§3, "Server features"); the rest a
    create a Telegram bot with @BotFather and pair it; run a network scan; check webcam / CCTV, power-cut
    detection and notifications.
 3. Check the inverter's back panel for a data port.
-4. Continue the roadmap: 6 (power-saving on battery), 7 (internet uptime + data bundle), 8 (status page).
-5. When the Tuya plugs arrive: Network watch will show them (Espressif); pair them in the Smart Life app,
-   get the local keys, then add plug support.
+4. When the Tuya plugs arrive: pair them in Smart Life, press Start discovery on Smart Devices, link each to
+   its appliance. Then build: local-key wizard, real on/off and live watts replacing the estimates.
+5. Continue the roadmap: 6 (power-saving on battery), 7 (internet uptime + data bundle), 8 (status page).
