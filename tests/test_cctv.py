@@ -76,6 +76,18 @@ class TestCctvStore(unittest.TestCase):
         again.remove_camera(cam["id"])
         self.assertEqual(len(CctvStore(self.root).cameras), 1)
 
+    def test_phone_camera_source(self):
+        cam = self.store.add_camera("Gate", source="phone")
+        self.assertEqual(CctvStore(self.root).camera(cam["id"])["source"], "phone")
+
+    def test_phone_host_and_app_urls(self):
+        from app.views.cctv import phone_host, PHONE_APPS
+        self.assertEqual(phone_host(" 192.168.1.23 "), "192.168.1.23")
+        self.assertEqual(phone_host("http://192.168.1.23:8080/video"), "192.168.1.23")
+        self.assertEqual(phone_host("user:pw@phone.lan:4747"), "phone.lan")
+        self.assertEqual(phone_host("192.168.1.23; rm -rf"), "")
+        self.assertEqual(PHONE_APPS["IP Webcam (Android)"].format(host="10.0.0.9"), "http://10.0.0.9:8080/video")
+
     def test_events_and_paths(self):
         cam = self.store.add_camera("PC Camera", device_id="x")
         snap = self.store.snapshot_path(cam["id"])
