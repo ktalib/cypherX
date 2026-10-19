@@ -14,7 +14,7 @@ home's power system, cameras and (soon) smart plugs.
 |---|---|
 | Home network UI (Smart Home + Apps) | Built and merged |
 | Sign-in, roles, lock | Built and merged |
-| Server console with boot checks | Built, pushed — **pull request not opened yet** |
+| Server console with boot checks | Built — in review as [#5](https://github.com/ktalib/cypherX/pull/5) |
 | Real hardware (smart plugs, inverter data) | Not started — waiting on hardware |
 | Tested on the Windows laptop | **Not yet** — everything so far was tested on a Linux cloud machine |
 
@@ -30,7 +30,7 @@ home's power system, cameras and (soon) smart plugs.
 | 2 | 17 Oct | [#2](https://github.com/ktalib/cypherX/pull/2) | **CCTV** — live camera grid (PC webcam, USB, RTSP/HTTP network cameras), motion detection with sensitivity, snapshots, recording, arm/disarm alerts, auto-cleanup of old files |
 | 3 | 17 Oct | [#3](https://github.com/ktalib/cypherX/pull/3) | **Home Dashboard** — one-page overview: live load, battery, meter, energy cost, tap-to-switch appliances, load by room, 24 h grid timeline, meter trend, security card; adapts to window width |
 | 4 | 18 Oct | [#4](https://github.com/ktalib/cypherX/pull/4) | **Sign-in and roles** (admin/admin first run, root vs user, lock, account management), **sidebar regrouped** into Smart Home / Apps / Server, new **Bills** and **Groceries** apps |
-| 5 | 19 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Server console** — Server button opens a boot screen with 8 real checks (launch, root access, system health, network, database, storage, updates, services), then a separate green server sidebar with a "Return to Home" button |
+| 5 | 19 Oct | [#5](https://github.com/ktalib/cypherX/pull/5) (open) | **Server console** — Server button opens a boot screen with 8 real checks (launch, root access, system health, network, database, storage, updates, services), then a separate green server sidebar with a "Return to Home" button |
 
 ---
 
@@ -131,7 +131,7 @@ Proposed on 19 October; **waiting for a pick** of which to build first.
 
 ## 8. Next steps
 
-1. Open the pull request for the server console (item 5 in §2) and merge it.
+1. Merge [#5](https://github.com/ktalib/cypherX/pull/5) (server console + this report).
 2. Run the app on the Windows laptop and check: webcam / CCTV, power-cut detection, notifications, layouts.
 3. Check the inverter's back panel for a data port.
 4. Pick roadmap features to build (suggested: 1, 2, 3).
