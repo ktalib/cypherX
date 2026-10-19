@@ -24,6 +24,9 @@ from app.server.bridge import GuiBridge
 from app.server.home_api import HomeApi
 from app.server.web import WebService
 from app.server.telegram import TelegramService
+from app.server.netwatch import NetWatchService
+from app.server.backup import BackupService, backup_check
+from app.views.lan_devices import LanDevicesView
 from app.services import server_checks
 from app.ui_polish import GlassBackdrop, polish_tables
 from app.views.settings import get_pref
@@ -163,6 +166,7 @@ class MainWindow(QMainWindow):
         self.services = ServiceManager(Database.get_instance())
         self._register_services()
         self.view_services = ServicesView(self.services, self)
+        self.view_lan_devices = LanDevicesView(self.services, self)
 
         # Map to stack in order of MODULE_DEFINITIONS
         self.view_map = {
@@ -186,6 +190,7 @@ class MainWindow(QMainWindow):
             "notes_tasks": self.view_notes_tasks,
             "bills": self.view_bills,
             "services": self.view_services,
+            "lan_devices": self.view_lan_devices,
             "groceries": self.view_groceries,
             "app_launcher": self.view_app_launcher,
             "automation_center": self.view_automation_center,
@@ -394,6 +399,38 @@ class MainWindow(QMainWindow):
         self.home_api = HomeApi(self, self.bridge)
         self.services.register(WebService(self.auth, self.home_api))
         self.services.register(TelegramService(self.home_api, bus))
+        self.services.register(NetWatchService(bus))
+        self.backup_service = self.services.register(
+            BackupService(bus, extra_actions=[("Restore from a backup…", self._restore_backup)]))
+
+    def _restore_backup(self):
+        """Pick a backup, save the current state, restore, restart CYPHER-X."""
+        import sys
+        from PySide6.QtCore import QProcess
+        from PySide6.QtWidgets import QFileDialog
+        svc = self.backup_service
+        path, _ = QFileDialog.getOpenFileName(self, "Restore from a backup", str(svc.folder()),
+                                              "CYPHER-X backups (cypherx-backup-*.zip)")
+        if not path:
+            return None
+        try:
+            manifest = svc.bm.read_manifest(path)
+        except Exception as e:
+            raise RuntimeError(f"That file isn't a CYPHER-X backup ({e})")
+        from datetime import datetime
+        when = datetime.fromtimestamp(manifest["created"]).strftime("%a %d %b %Y %H:%M")
+        if QMessageBox.question(self, "Restore backup",
+                                f"Restore the backup from {when}?\n\nEverything changed since then is replaced. "
+                                "The current state is saved first as a 'pre-restore' backup, and CYPHER-X "
+                                "restarts.") != QMessageBox.Yes:
+            return None
+        svc.backup_now(tag="pre-restore")
+        svc.bm.restore(path)
+        Database.get_instance().log_operation("Backups", f"Restored backup from {when}", "Success")
+        QProcess.startDetached(sys.executable, sys.argv)
+        self.quit_app()
+        QApplication.quit()
+        return None
 
     def _watchdog(self):
         for sid in self.services.watchdog():
@@ -477,6 +514,7 @@ class MainWindow(QMainWindow):
             ("Connecting to database", lambda: server_checks.check_database(DB_PATH)),
             ("Checking storage", server_checks.check_storage),
             ("Checking for updates", lambda: server_checks.check_updates(APP_VERSION)),
+            ("Checking backups", lambda: backup_check(self.backup_service)),
             ("Starting services", self._services_step),
         ]
 
@@ -557,6 +595,7 @@ class MainWindow(QMainWindow):
         self._watchdog_timer = QTimer(self)
         self._watchdog_timer.timeout.connect(self._watchdog)
         self._watchdog_timer.start(3000)
+        self._watchdog()
 
     def _setup_telemetry_loop(self):
         # Immediate sample

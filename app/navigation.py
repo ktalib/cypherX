@@ -25,6 +25,7 @@ MODULES = {
     "dashboard": ("Command Center", "dashboard", "Main operations telemetry hub"),
     "services": ("Services", "layers", "Background services, watchdog & logs"),
     "my_computer": ("My Computer", "computer", "System overview & hardware"),
+    "lan_devices": ("Wi-Fi Devices", "wifi", "Every device on the home network"),
     "system_monitor": ("System Monitor", "system_monitor", "Live CPU, RAM & Disk charts"),
     "network_monitor": ("Network Monitor", "network_monitor", "Interface & bandwidth stats"),
     "process_manager": ("Process Manager", "process_manager", "Task & PID controller"),
@@ -50,7 +51,7 @@ NAV_GROUPS = [
 
 # Server console sidebar (the PC the smart home runs on): sections (title, module_ids). Root only.
 SERVER_SECTIONS = [
-    ("Overview", ["dashboard", "services", "my_computer", "system_monitor", "network_monitor"]),
+    ("Overview", ["dashboard", "services", "my_computer", "system_monitor", "network_monitor", "lan_devices"]),
     ("Processes & automation", ["process_manager", "startup_manager", "automation_center"]),
     ("Storage & files", ["disk_analyzer", "disk_cleaner", "file_explorer", "folder_organizer",
                          "duplicate_finder", "large_file_finder"]),

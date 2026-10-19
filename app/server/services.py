@@ -262,6 +262,7 @@ class ServiceManager:
         svc.manager = self
         self.services[svc.id] = svc
         self.order.append(svc.id)
+        _ = svc.started_at          # a wrapped service may already be running: note since when
         return svc
 
     def get(self, sid):
@@ -321,6 +322,9 @@ class ServiceManager:
         restarted = []
         for sid in self.order:
             svc = self.services[sid]
+            if isinstance(svc, ManagedService):
+                _ = svc.started_at  # notices starts / stops made elsewhere in the app
+                continue
             if not isinstance(svc, ThreadService) or not self.enabled(sid):
                 continue
             if svc.status in (RUNNING, STARTING) and not svc.alive():
