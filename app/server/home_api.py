@@ -69,7 +69,8 @@ class HomeApi:
                         for d in sorted(m.devices(), key=lambda d: (d["room"], d["name"]))],
             "security": {
                 "armed": bool(cctv.store.config.get("armed")),
-                "cameras": [{"id": cid, "name": f.cam["name"], "live": f.running} for cid, f in cctv.feeds.items()],
+                "cameras": [{"id": cid, "name": f.cam["name"], "live": f.running, "source": f.cam["source"]}
+                            for cid, f in cctv.feeds.items()],
                 "motion_today": sum(1 for ev in cctv.store.events_since(today) if ev["kind"] == "motion"),
                 "latest": {"camera": latest["camera_name"], "ts": latest["ts"], "kind": latest["kind"]}
                 if latest else None,
@@ -163,6 +164,44 @@ class HomeApi:
             if latest:
                 return f"{latest['camera_name']} · {datetime.fromtimestamp(latest['ts']):%a %H:%M}"
             return None
+        return self._gui(do)
+
+    # ------------------------------------------------------- phone camera --
+
+    def phonecam_start(self, name, who):
+        def do():
+            feed = self.w.view_cctv.phone_camera(name)
+            self._log(f"Phone camera '{feed.cam['name']}' started", who)
+            return {"id": feed.cam["id"], "name": feed.cam["name"]}
+        return self._gui(do)
+
+    def phonecam_frame(self, cam_id, jpeg):
+        from app.server.web import ApiError
+
+        def do():
+            cctv = self.w.view_cctv
+            feed = cctv.feeds.get(cam_id)
+            if feed is None or feed.cam["source"] != "phone":
+                raise ApiError(404, "This camera was removed on the PC")
+            result = feed.push_jpeg(jpeg)
+            if result == "off":
+                raise ApiError(409, "Switched off on the PC")
+            if result == "bad":
+                raise ApiError(400, "That picture couldn't be read")
+            tile = cctv.tiles.get(cam_id)
+            return {"ok": True, "armed": bool(cctv.store.config.get("armed")),
+                    "motion": bool(tile and tile.canvas.motion_until > time.time())}
+        return self._gui(do)
+
+    def phonecam_stop(self, cam_id, who):
+        def do():
+            cctv = self.w.view_cctv
+            feed = cctv.feeds.get(cam_id)
+            if feed is not None and feed.cam["source"] == "phone" and feed.running:
+                feed.stop()               # not held: the phone can start it again
+                cctv._sync_bar()
+                self._log(f"Phone camera '{feed.cam['name']}' stopped", who)
+            return {"ok": True}
         return self._gui(do)
 
     # -------------------------------------------------------------- money --

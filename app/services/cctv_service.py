@@ -2,8 +2,9 @@
 CCTV — camera list, motion detection, motion events and the snapshot /
 recording folders. No Qt here, so it can be unit tested on its own.
 
-Cameras are either a local video device (the PC webcam, a USB camera) or a
-network stream URL (rtsp:// or http:// from an IP / Wi-Fi CCTV camera).
+Cameras are a local video device (the PC webcam, a USB camera), a network
+stream URL (rtsp:// or http:// from an IP / Wi-Fi CCTV camera or a phone camera
+app), or a phone browser that sends pictures to the web dashboard ("phone").
 
 Motion detection works on small grayscale thumbnails (e.g. 64 x 48) sampled a
 few times a second: a pixel counts as changed when it differs from the previous
@@ -114,9 +115,9 @@ class CctvStore:
     def camera(self, cam_id):
         return next((c for c in self.cameras if c["id"] == cam_id), None)
 
-    def add_camera(self, name, device_id=None, url=None):
+    def add_camera(self, name, device_id=None, url=None, source=None):
         cam = {"id": "cam_" + uuid.uuid4().hex[:6], "name": name,
-               "source": "url" if url else "device", "device_id": device_id or "", "url": url or "",
+               "source": source or ("url" if url else "device"), "device_id": device_id or "", "url": url or "",
                "motion": True, "sensitivity": 6, "record_on_motion": False, "auto_start": False}
         self.cameras.append(cam)
         self.save()

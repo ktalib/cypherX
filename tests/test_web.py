@@ -1,6 +1,12 @@
 import json
+import shutil
+import ssl
+import tempfile
+import threading
 import unittest
-from app.server.web import WebApp, LoginLimiter, LOGIN_TRIES
+import urllib.error
+import urllib.request
+from app.server.web import WebApp, LoginLimiter, LOGIN_TRIES, MAX_FRAME, _Server, make_handler
 
 
 class FakeAuth:
@@ -35,6 +41,18 @@ class FakeApi:
 
     def snapshot_jpeg(self, cam):
         return b"\xff\xd8jpeg"
+
+    def phonecam_start(self, name, who):
+        self.calls.append(("pc_start", name, who))
+        return {"id": "cam_1", "name": name}
+
+    def phonecam_frame(self, cam_id, jpeg):
+        self.calls.append(("pc_frame", cam_id, len(jpeg)))
+        return {"ok": True, "armed": False, "motion": False}
+
+    def phonecam_stop(self, cam_id, who):
+        self.calls.append(("pc_stop", cam_id, who))
+        return {"ok": True}
 
 
 def call(app, method, path, body=None, token=None, ip="192.168.1.5"):
@@ -99,6 +117,91 @@ class TestWeb(unittest.TestCase):
             lim.fail("a", now=0)
         self.assertTrue(lim.blocked("a", now=1))
         self.assertFalse(lim.blocked("a", now=1000))
+
+
+    def test_phone_camera_routes(self):
+        token = login(self.app, "mum", "1234")              # any signed-in user may add a phone camera
+        self.assertEqual(call(self.app, "GET", "/api/phonecam", token=token)[1], {"https_port": 0})
+        self.app.https_port = 8443
+        self.assertEqual(call(self.app, "GET", "/api/phonecam", token=token)[1]["https_port"], 8443)
+        self.assertEqual(call(self.app, "POST", "/api/phonecam/start", {"name": "  Front \n  gate " + "x" * 80}, token)[1]["id"],
+                         "cam_1")
+        self.assertEqual(self.api.calls[-1][1], ("Front gate " + "x" * 80)[:40])
+        call(self.app, "POST", "/api/phonecam/start", {}, token)
+        self.assertEqual(self.api.calls[-1][1], "Phone camera")
+        jpeg = b"\xff\xd8" + bytes(range(256)) * 4                  # binary: must not be parsed as JSON
+        status, _, _, _ = self.app.handle("POST", "/api/phonecam/cam_1/frame", {}, jpeg, token, "1.2.3.4")
+        self.assertEqual(status, 200)
+        self.assertEqual(self.api.calls[-1], ("pc_frame", "cam_1", len(jpeg)))
+        self.assertEqual(self.app.handle("POST", "/api/phonecam/cam_1/frame", {}, b"", token, "1.2.3.4")[0], 400)
+        self.assertEqual(self.app.handle("POST", "/api/phonecam/cam_1/frame", {}, jpeg, None, "1.2.3.4")[0], 401)
+        self.assertEqual(call(self.app, "POST", "/api/phonecam/cam_1/stop", {}, token)[0], 200)
+        self.assertEqual(self.api.calls[-1], ("pc_stop", "cam_1", "mum"))
+
+
+class TestHttps(unittest.TestCase):
+    """The real socket server over TLS with a certificate made by app.server.tls."""
+
+    @classmethod
+    def setUpClass(cls):
+        from app.server.tls import ensure_certificate, server_context
+        cls.dir = tempfile.mkdtemp(prefix="cyberops_test_tls_")
+        cls.cert, key = ensure_certificate([], folder=cls.dir)
+        cls.api = FakeApi()
+        cls.app = WebApp(FakeAuth(), cls.api)
+        cls.srv = _Server(("127.0.0.1", 0), make_handler(cls.app))
+        cls.srv.socket = server_context(cls.cert, key).wrap_socket(cls.srv.socket, server_side=True,
+                                                                     do_handshake_on_connect=False)
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+        cls.base = f"https://127.0.0.1:{cls.srv.server_address[1]}"
+        cls.ctx = ssl.create_default_context(cafile=cls.cert)     # trust our own certificate, verify normally
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.shutdown()
+        cls.srv.server_close()
+        shutil.rmtree(cls.dir, ignore_errors=True)
+
+    def req(self, path, data=None, ctype=None, token=None):
+        r = urllib.request.Request(self.base + path, data=data, method="POST" if data is not None else "GET")
+        if ctype:
+            r.add_header("Content-Type", ctype)
+        if token:
+            r.add_header("Cookie", f"cx_session={token}")
+        try:
+            with urllib.request.urlopen(r, context=self.ctx, timeout=5) as resp:
+                return resp.status, resp.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read()
+        except urllib.error.URLError:            # refused before the upload finished (sent 413, then closed)
+            return 413, b""
+
+    def test_page_and_frame_upload_over_tls(self):
+        self.assertEqual(self.req("/")[0], 200)
+        token = login(self.app)
+        jpeg = b"\xff\xd8" + b"\0" * 200_000                 # bigger than a JSON body may be
+        self.assertEqual(self.req("/api/phonecam/cam_1/frame", jpeg, "image/jpeg", token)[0], 200)
+        self.assertEqual(self.api.calls[-1], ("pc_frame", "cam_1", len(jpeg)))
+        self.assertEqual(self.req("/api/phonecam/cam_1/frame", jpeg, "application/json", token)[0], 415)
+        self.assertEqual(self.req("/api/meter/reading", jpeg, "application/json", token)[0], 413)
+        self.assertEqual(self.req("/api/phonecam/cam_1/frame", b"\0" * (MAX_FRAME + 1), "image/jpeg", token)[0], 413)
+
+
+class TestCertificate(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="cyberops_test_cert_")
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_reused_until_the_address_changes(self):
+        from app.server.tls import ensure_certificate
+        cert, _ = ensure_certificate(["192.168.1.20"], folder=self.dir)
+        first = open(cert, "rb").read()
+        ensure_certificate(["192.168.1.20"], folder=self.dir)
+        self.assertEqual(open(cert, "rb").read(), first)
+        ensure_certificate(["192.168.1.31"], folder=self.dir)     # PC got a new address → new certificate
+        self.assertNotEqual(open(cert, "rb").read(), first)
 
 
 if __name__ == "__main__":
