@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 from app.icons import get_icon
 from app.database import Database
 from app.services.cctv_service import CctvStore, MotionDetector
+from app.server.events import bus
 from app.widgets.home.common import make_menu, hicon
 
 try:
@@ -762,6 +763,8 @@ class CctvView(QWidget):
             win = self.window()
             if hasattr(win, "notify"):
                 win.notify("Motion detected", f"{feed.cam['name']} — {datetime.now():%H:%M:%S}")
+            bus.publish("motion", "Motion detected", f"{feed.cam['name']} — {datetime.now():%H:%M:%S}",
+                        camera=feed.cam["name"], snapshot=str(snap) if snap else None)
 
     def _arm_toggled(self, on):
         self.store.config["armed"] = on

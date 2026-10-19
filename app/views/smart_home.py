@@ -33,6 +33,7 @@ from app.database import Database
 from app.home3d.model import HomeModel, HOME_FILE
 from app.home3d.view3d import House3DView
 from app.home3d.energy import EnergyLog, read_grid_from_charger
+from app.server.events import bus
 from app.widgets.home.common import make_menu, hicon
 
 
@@ -727,6 +728,9 @@ class SmartHomeView(QWidget):
         if change == "off":
             self._log("Power cut: grid went off (laptop charger lost power)")
             self._notify("Power cut", "Grid is off — running on the inverter.")
+            rt = self.model.runtime_hours()
+            bus.publish("power", "Power cut", "Grid is off — running on the inverter."
+                        + (f" Battery lasts about {_fmt_hours(rt)} at the current load." if rt else ""))
             if pw.get("source") == "Grid":
                 self.source.setCurrentText("Inverter (battery)")
         else:
@@ -734,6 +738,7 @@ class SmartHomeView(QWidget):
             dur = _fmt_hours((o["end"] - o["start"]) / 3600)
             self._log(f"Grid restored after {dur}")
             self._notify("Grid restored", f"Power is back after {dur}.")
+            bus.publish("power", "Grid restored", f"Power is back after {dur}.")
             if pw.get("source") == "Inverter (battery)":
                 self.source.setCurrentText("Grid")
         self.refresh()

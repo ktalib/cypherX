@@ -23,6 +23,7 @@ from app.server.events import bus
 from app.server.bridge import GuiBridge
 from app.server.home_api import HomeApi
 from app.server.web import WebService
+from app.server.telegram import TelegramService
 from app.services import server_checks
 from app.ui_polish import GlassBackdrop, polish_tables
 from app.views.settings import get_pref
@@ -392,11 +393,28 @@ class MainWindow(QMainWindow):
         self.bridge = GuiBridge(self)
         self.home_api = HomeApi(self, self.bridge)
         self.services.register(WebService(self.auth, self.home_api))
+        self.services.register(TelegramService(self.home_api, bus))
 
     def _watchdog(self):
         for sid in self.services.watchdog():
             svc = self.services.get(sid)
             bus.publish("service", "Service restarted", f"{svc.title} crashed and was restarted by the watchdog")
+        self._ticks = getattr(self, "_ticks", 0) + 1
+        if self._ticks % 200 == 1:                 # every ~10 min
+            self._check_meter_low()
+
+    def _check_meter_low(self):
+        """Once a day, warn when the prepaid meter has less than 2 days left."""
+        from datetime import date
+        e = self.view_smart_home.energy
+        days = e.days_left()
+        db = Database.get_instance()
+        if days is None or days >= 2 or db.get_setting("meter_low_alerted", "") == date.today().isoformat():
+            return
+        db.set_setting("meter_low_alerted", date.today().isoformat())
+        msg = f"About {days * 24:.0f} hours of units left ({e.units_left():.1f} kWh). Buy a token soon."
+        self.notify("Prepaid meter low", msg)
+        bus.publish("meter", "Prepaid meter low", msg)
 
     # -------------------------------------------------------------- server --
 
