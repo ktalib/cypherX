@@ -21,7 +21,7 @@ home's power system, cameras and (soon) smart plugs.
 | Inverter data | Waiting — check the back panel for a data port |
 | Tested on the Windows laptop | **Not yet** — everything so far was tested on a Linux cloud machine |
 
-**Codebase:** about 27,900 lines (Python / PySide6 + one HTML page for phones), 79 unit tests (78 pass — see §5).
+**Codebase:** about 27,900 lines (Python / PySide6 + one HTML page for phones), 94 unit tests (93 pass — see §5).
 
 ---
 
@@ -38,7 +38,8 @@ home's power system, cameras and (soon) smart plugs.
 | 7 | 19 Oct | _same branch, not opened yet_ | **Smart device discovery** — finds Tuya / Smart Life plugs, sockets, bulbs and switches from their broadcasts (protocol 3.1 / 3.3 / 3.5), TP-Link Kasa, Shelly / ESPHome / Sonoff / HomeKit via mDNS, Shelly / Tasmota via HTTP; **Smart Devices** page to name devices and link each to its appliance |
 | 8 | 19 Oct | _same branch, not opened yet_ | **Smart plug control** — linked plugs switch for real from the app, 3D view, web dashboard and Telegram; live watts / volts read every 5 s replace the estimates; Tuya local keys by paste or **Import Tuya keys** from the Tuya cloud (once); drivers for Tuya (tinytuya), Shelly gen 1/2, Tasmota, TP-Link Kasa |
 | 9 | 19 Oct | [#7](https://github.com/ktalib/cypherX/pull/7) | **Phone dashboard redesign** — app-style web dashboard: bottom tab bar (side rail on tablets / PCs), power ring, quick actions, room cards, device tiles with switches and live watts, bottom sheet for meter readings / tokens, light & dark themes, offline banner, add-to-home-screen icon |
-| 10 | 19 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Phone as a CCTV camera** — *Add camera → Phone camera app* (IP Webcam / DroidCam: just the phone's IP); or no app at all: the dashboard also runs on a secure port (self-made HTTPS certificate) where *Security → Use this phone as a camera* streams pictures into CCTV with motion detection and alerts |
+| 10 | 19 Oct | [#8](https://github.com/ktalib/cypherX/pull/8) | **Phone as a CCTV camera** — *Add camera → Phone camera app* (IP Webcam / DroidCam: just the phone's IP); or no app at all: the dashboard also runs on a secure port (self-made HTTPS certificate) where *Security → Use this phone as a camera* streams pictures into CCTV with motion detection and alerts |
+| 11 | 19 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Fridge stock** — counts for a fridge that isn't smart: bought groceries add stock, AI photo checks correct it (Gemini, OpenRouter, Groq, Ollama — free; Claude, OpenAI — paid; backup provider), usage rates, "runs out in", low alerts onto the shopping list; on the desktop, phone dashboard (Fridge tab) and Telegram (send a photo, /fridge, /took, /add); optional ESP32-S3 fridge camera service + firmware |
 
 ---
 
@@ -93,20 +94,23 @@ start automatically, settings, actions and its own log. A **watchdog** restarts 
 | Invertek Mega+ inverter | Unknown | **Open question:** check the back panel for a USB / RS232 / RJ45 "COM" port |
 | Laptop charger | Yes — used for power-cut detection | Needs testing on the laptop (charger in a grid-only socket) |
 | PC webcam | Yes | Used for the CCTV demo; real cameras should support RTSP/ONVIF |
+| ESP32-S3 N16R8 CAM (fridge) | Optional, not bought yet | Firmware ready in `firmware/fridge_cam` (untested on hardware) |
 | Phones | Yes — as cameras | Via IP Webcam / DroidCam, or the dashboard's secure page (no app); needs testing with a real phone |
 
 ---
 
 ## 5. Testing
 
-- **Unit tests:** 79 (energy log 9, smart device discovery 9, plug control 8, CCTV 9, network watch + backups 7,
-  accounts/bills/groceries 6, service manager 6, Telegram 6, server checks 5, web dashboard 8, original 6). 78 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
+- **Unit tests:** 94 (fridge + AI providers 15, energy log 9, smart device discovery 9, plug control 8, CCTV 9, network watch + backups 7,
+  accounts/bills/groceries 6, service manager 6, Telegram 6, server checks 5, web dashboard 8, original 6). 93 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
   tests run on Linux (`C:\Windows` isn't an absolute path there).
 - **App checks:** each feature was run headless on a Linux cloud machine with sample data and screenshotted —
   layouts, navigation between Home and Server, sign-in, roles, lock, motion detection with synthetic frames.
   The web dashboard was driven in a real browser (Chromium, phone size): sign-in, switching an appliance (the
   desktop updated), a meter reading, all four tabs. The phone camera was tested with Chromium's fake camera over
-  the secure port: pictures arrived on the desktop CCTV page as a live camera and triggered motion detection. Telegram was tested against a fake Telegram server
+  the secure port: pictures arrived on the desktop CCTV page as a live camera and triggered motion detection.
+  The fridge was run end to end against fake AI servers (each provider's request format) and a fake ESP32 camera:
+  door opened → counted, low eggs → shopping list, phone −/+, photo upload and add item in Chromium. Telegram was tested against a fake Telegram server
   (this cloud machine can't reach the real one). Smart device discovery was tested with hand-built Tuya
   broadcasts (all three formats) sent to the real UDP ports, and a fake Kasa plug answering on UDP. Plug control
   was tested end to end with a simulated Tuya plug: switching from the Smart Devices card, the web API and a

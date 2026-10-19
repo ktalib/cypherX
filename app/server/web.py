@@ -196,9 +196,18 @@ class WebApp:
                 return api.server()
             if parts == ["phonecam"]:
                 return {"https_port": self.https_port}
-        if method == "POST" and len(parts) == 3 and parts[0] == "phonecam" and parts[2] == "frame":
+            if parts == ["fridge"]:
+                return api.fridge()
+            if parts == ["fridge", "photo.jpg"]:
+                data = api.fridge_photo_jpeg()
+                if not data:
+                    raise ApiError(404, "No fridge photo yet")
+                return ("image/jpeg", data)
+        if method == "POST" and is_image_upload(method, path):
             if not body:
                 raise ApiError(400, "No picture")
+            if parts[0] == "fridge":
+                return api.fridge_check(body, user["username"])
             return api.phonecam_frame(parts[1], body)
         if method == "POST":
             data = _json(body)
@@ -220,6 +229,15 @@ class WebApp:
                 return api.phonecam_start(name, who)
             if len(parts) == 3 and parts[0] == "phonecam" and parts[2] == "stop":
                 return api.phonecam_stop(parts[1], who)
+            if parts == ["fridge", "add"]:
+                name = " ".join(str(data.get("name") or "").split())[:40]
+                if not name:
+                    raise ApiError(400, "Give the item a name")
+                return api.fridge_add(name, int(_number(data, "count", 0, 999)) if "count" in data else 0, who)
+            if len(parts) == 3 and parts[0] == "fridge" and parts[2] == "adjust":
+                return api.fridge_adjust(parts[1], int(_number(data, "delta", -100, 100)), who)
+            if len(parts) == 3 and parts[0] == "fridge" and parts[2] == "set":
+                return api.fridge_set(parts[1], int(_number(data, "count", 0, 999)), who)
         raise ApiError(404, "Not found")
 
 
@@ -257,8 +275,11 @@ class _Server(ThreadingHTTPServer):
         pass                          # dropped connections / refused certificates are normal here
 
 
-def is_frame_upload(method, path):
-    return method == "POST" and path.startswith("/api/phonecam/") and path.endswith("/frame")
+def is_image_upload(method, path):
+    """Routes that take a raw JPEG body: phone camera frames and fridge photos."""
+    if method != "POST":
+        return False
+    return (path.startswith("/api/phonecam/") and path.endswith("/frame")) or path == "/api/fridge/photo"
 
 
 def make_handler(app):
@@ -269,7 +290,7 @@ def make_handler(app):
 
         def _serve(self, method):
             url = urlparse(self.path)
-            frame = is_frame_upload(method, url.path)
+            frame = is_image_upload(method, url.path)
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
