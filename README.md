@@ -4,6 +4,8 @@ CYPHER-X is a modern, macOS / iOS Sonoma-inspired desktop operations hub and wid
 
 ---
 
+> Project status, delivered work, hardware notes and the roadmap: see [`Doc/PROGRESS.md`](Doc/PROGRESS.md).
+
 ## Key Features & Modules
 
 1. **Widget Screen (Home)**: Full-viewport liquid-glass home that always fits the window (no scroll bar), with immersive full screen (F11 / Esc). Background slideshow with crossfade from images or folders on your PC, an image URL, or an online feed that loads a new photo on every slide (default: picsum.photos). Widgets: working music player (files, folders, drag-and-drop, stream URLs, shuffle/repeat, live spectrum), live weather (Open-Meteo, no API key), calendar, focus timer, tasks (shared with Notes & Tasks), auto-saved notes, system gauges, world clocks and a quick-launch dock. Widgets can be shown/hidden individually, or hidden all at once with Focus mode.
