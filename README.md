@@ -4,6 +4,8 @@ CYPHER-X is a modern, macOS / iOS Sonoma-inspired desktop operations hub and wid
 
 ---
 
+> Project status, delivered work, hardware notes and the roadmap: see [`Doc/PROGRESS.md`](Doc/PROGRESS.md).
+
 ## Key Features & Modules
 
 1. **Widget Screen (Home)**: Full-viewport liquid-glass home that always fits the window (no scroll bar), with immersive full screen (F11 / Esc). Background slideshow with crossfade from images or folders on your PC, an image URL, or an online feed that loads a new photo on every slide (default: picsum.photos). Widgets: working music player (files, folders, drag-and-drop, stream URLs, shuffle/repeat, live spectrum), live weather (Open-Meteo, no API key), calendar, focus timer, tasks (shared with Notes & Tasks), auto-saved notes, system gauges, world clocks and a quick-launch dock. Widgets can be shown/hidden individually, or hidden all at once with Focus mode.
@@ -40,10 +42,11 @@ CYPHER-X is a modern, macOS / iOS Sonoma-inspired desktop operations hub and wid
 
 - CYPHER-X opens with a sign-in screen. First run: **admin / admin** with **root** access. Change it in **Settings → Accounts** (the app keeps reminding until you do). Passwords are stored as salted PBKDF2 hashes; five wrong tries lock the sign-in for 30 seconds.
 - **Lock** with the padlock at the bottom of the sidebar, **Ctrl+L**, or the tray menu. Any account can unlock; the app follows whoever signs in.
-- The sidebar has three collapsible groups:
+- The home network sidebar has two collapsible groups:
   - **Smart Home** — Home Dashboard, Smart Home (3D), CCTV, Widget Screen
   - **Apps** — Notes & Tasks, Bills, Groceries, Clock & Calendar, App Launcher
-  - **Server** — the PC the smart home runs on: Command Center, My Computer, monitors, process / startup managers, disk and file tools, automation, operation history. Collapsed by default and **root only**.
+- **Server** (root only) opens the **server console** for the PC the smart home runs on. It starts with a boot screen that runs real checks one by one — launching the server, verifying root access, system health (CPU / RAM / uptime), network connection (LAN address, internet reachability and latency), database (SQLite integrity check), storage (free space), updates (shows the installed version; no update server exists yet) and services (automations, cameras, grid watch). Warnings don't stop the boot; a failed root check does. Then the console opens with its own green sidebar — **Overview** (Command Center, My Computer, System / Network Monitor), **Processes & automation**, **Storage & files**, **Logs** — and a **Return to Home** button in the sidebar and in the "Server console" banner.
+- Links between the two worlds just work: a server tool opened from the home network goes through the boot screen; a home page opened from the server switches back home.
 - Roles: **root** sees everything and manages users (add, reset password, remove — the last root can't be removed); **user** sees Smart Home and Apps.
 
 ## Bills

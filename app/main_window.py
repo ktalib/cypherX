@@ -4,16 +4,20 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStackedWidget, QMessageBox, QSystemTrayIcon, QMenu, QApplication
+    QStackedWidget, QMessageBox, QSystemTrayIcon, QMenu, QApplication, QFrame, QLabel, QPushButton
 )
 from app.icons import get_icon
 from app.database import Database
 from app.config import (
-    APP_NAME, APP_SUBTITLE, APP_VERSION, DEFAULT_METRICS_INTERVAL_MS
+    APP_NAME, APP_SUBTITLE, APP_VERSION, DEFAULT_METRICS_INTERVAL_MS, DB_PATH
 )
 from app.widgets.status_bar import TopStatusBar
 from app.widgets.right_panel import RightInfoPanel
-from app.navigation import NavigationSidebar, MODULE_DEFINITIONS, MODULES, module_allowed
+from app.navigation import (
+    NavigationSidebar, MODULE_DEFINITIONS, MODULES, module_allowed, module_mode, HOME_MODE, SERVER_MODE
+)
+from app.views.server_boot import ServerBootView
+from app.services import server_checks
 from app.ui_polish import GlassBackdrop, polish_tables
 from app.views.settings import get_pref
 from app.services.system_service import SystemService
@@ -53,6 +57,8 @@ class MainWindow(QMainWindow):
         self.user = user or {"username": "admin", "role": "root"}
         self.auth = auth
         self._locked = False
+        self._pending_server_page = "dashboard"
+        self._last_home_page = "smart_dashboard"
         self.setWindowTitle(f"{APP_NAME} // {APP_SUBTITLE} [v{APP_VERSION}]")
         self.resize(1360, 860)
         self.setMinimumSize(1024, 640)
@@ -89,6 +95,8 @@ class MainWindow(QMainWindow):
         self.sidebar = NavigationSidebar(self)
         self.sidebar.module_selected.connect(self._on_navigation_change)
         self.sidebar.lock_requested.connect(self.lock)
+        self.sidebar.server_requested.connect(self.enter_server)
+        self.sidebar.home_requested.connect(self.return_home)
         body_layout.addWidget(self.sidebar)
 
         # Right Telemetry Rail
@@ -97,7 +105,12 @@ class MainWindow(QMainWindow):
         # Center Stacked Widget
         self.stack = QStackedWidget(self)
         self._init_views()
-        body_layout.addWidget(self.stack, stretch=1)
+        center = QVBoxLayout()
+        center.setContentsMargins(0, 0, 0, 0)
+        center.setSpacing(0)
+        center.addWidget(self._build_server_banner())
+        center.addWidget(self.stack, stretch=1)
+        body_layout.addLayout(center, stretch=1)
         body_layout.addWidget(self.right_panel)
 
         master_layout.addLayout(body_layout)
@@ -177,6 +190,12 @@ class MainWindow(QMainWindow):
 
         assert self.stack.count() == len(MODULE_DEFINITIONS), "every sidebar entry needs a page"
 
+        # The server boot screen sits after the sidebar pages (it has no sidebar entry)
+        self.view_server_boot = ServerBootView(self)
+        self.view_server_boot.finished.connect(self._server_ready)
+        self.view_server_boot.cancelled.connect(self.return_home)
+        self.stack.addWidget(self.view_server_boot)
+
         # By default start on Widget Screen and hide right panel for edge-to-edge view
         self.navigate_by_id("widget_screen")
         self.right_panel.setVisible(False)
@@ -215,6 +234,7 @@ class MainWindow(QMainWindow):
             self.tray.showMessage(title, message, QSystemTrayIcon.Information, 8000)
 
     def quit_app(self):
+        self.view_server_boot.stop()
         self._really_quit = True
         self.close()
 
@@ -272,6 +292,10 @@ class MainWindow(QMainWindow):
     def _on_navigation_change(self, index: int, module_id: str):
         if not module_allowed(module_id, self.user.get("role")):
             return
+        if self.view_server_boot.running:
+            self.view_server_boot.stop()          # left the boot screen for another page
+        if module_mode(module_id) == HOME_MODE:
+            self._last_home_page = module_id
         if index < self.stack.count():
             self.stack.setCurrentIndex(index)
             # Full edge-to-edge canvas for Widget Screen
@@ -286,11 +310,113 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Root access needed",
                                     f"{name} is a Server tool. Sign in as a root user to open it.")
             return
+        mode = module_mode(module_id)
+        if mode == SERVER_MODE and self.sidebar.mode != SERVER_MODE:
+            self.enter_server(module_id)          # server pages open through the boot screen
+            return
+        if mode == HOME_MODE and self.sidebar.mode == SERVER_MODE:
+            self.server_banner.hide()
+            self.sidebar.set_mode(HOME_MODE)
         for idx, item in enumerate(MODULE_DEFINITIONS):
             if item[0] == module_id:
                 self.sidebar.expand_group_of(module_id)
                 self.sidebar._on_module_clicked(idx, module_id)
                 break
+
+    # -------------------------------------------------------------- server --
+
+    def _build_server_banner(self):
+        """Green strip shown above every page while the server console is open."""
+        import socket
+        bar = QFrame()
+        bar.setObjectName("server_banner")
+        bar.setStyleSheet("QFrame#server_banner{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+                          "stop:0 rgba(34,197,94,0.22),stop:1 rgba(34,197,94,0.04));"
+                          "border-bottom:1px solid rgba(34,197,94,0.35);}")
+        lo = QHBoxLayout(bar)
+        lo.setContentsMargins(16, 6, 12, 6)
+        dot = QLabel("●")
+        dot.setStyleSheet("color:#22c55e;font-size:12px;background:transparent;")
+        title = QLabel("SERVER CONSOLE")
+        title.setStyleSheet("color:#dcfce7;font-size:11px;font-weight:800;letter-spacing:2px;background:transparent;")
+        self.server_info = QLabel()
+        self.server_info.setStyleSheet("color:#86efac;font-size:11px;background:transparent;")
+        self._server_host = socket.gethostname()
+        home = QPushButton("  Return to Home")
+        home.setIcon(get_icon("home", "#04131d", 13))
+        home.setCursor(Qt.PointingHandCursor)
+        home.setStyleSheet("QPushButton{background:#38bdf8;color:#04131d;border:none;border-radius:12px;"
+                           "padding:4px 12px;font-size:11px;font-weight:800;}QPushButton:hover{background:#7dd3fc;}")
+        home.clicked.connect(lambda: self.return_home())
+        lo.addWidget(dot)
+        lo.addWidget(title)
+        lo.addSpacing(10)
+        lo.addWidget(self.server_info, 1)
+        lo.addWidget(home)
+        bar.hide()
+        self.server_banner = bar
+        return bar
+
+    def enter_server(self, target="dashboard"):
+        """Leave the home network: run the boot checks, then open the server console."""
+        if self.user.get("role") != "root":
+            QMessageBox.information(self, "Root access needed",
+                                    "The server console is for root users. Sign in as root to open it.")
+            return
+        self._pending_server_page = target if isinstance(target, str) else "dashboard"
+        if self._immersive:
+            self.set_immersive(False)
+        self.right_panel.setVisible(False)
+        self.server_banner.hide()
+        self.sidebar.setVisible(False)            # the boot screen stands on its own
+        self.sidebar._set_active_button(-1)
+        self.stack.setCurrentWidget(self.view_server_boot)
+        self.view_server_boot.start(self._boot_steps())
+
+    def _boot_steps(self):
+        # Gather what lives in Qt objects here, on the GUI thread; the checks run in a worker.
+        try:
+            with Database.get_instance()._get_connection() as conn:
+                automations = conn.execute("SELECT COUNT(*) FROM automations WHERE enabled = 1").fetchone()[0]
+        except Exception:
+            automations = 0
+        cams = len(self.view_cctv.store.cameras)
+        live = sum(1 for f in self.view_cctv.feeds.values() if f.running)
+        grid = bool(self.view_smart_home.energy.grid_detect)
+        user = dict(self.user)
+        return [
+            ("Launching server", server_checks.check_launch),
+            ("Verifying root access", lambda: server_checks.check_root(user)),
+            ("Checking system health", server_checks.check_system),
+            ("Checking network connection", server_checks.check_network),
+            ("Connecting to database", lambda: server_checks.check_database(DB_PATH)),
+            ("Checking storage", server_checks.check_storage),
+            ("Checking for updates", lambda: server_checks.check_updates(APP_VERSION)),
+            ("Starting services", lambda: server_checks.check_services(automations, cams, live, grid)),
+        ]
+
+    def _server_ready(self, results):
+        warns = sum(1 for r in results if r[1] in (server_checks.WARN, server_checks.FAIL))
+        try:
+            Database.get_instance().log_operation(
+                "Server", f"Server console opened ({warns} warning{'s' if warns != 1 else ''})", "Success")
+        except Exception:
+            pass
+        from datetime import datetime
+        self.server_info.setText(f"{self._server_host}  ·  online since {datetime.now():%H:%M}"
+                                 + (f"  ·  {warns} warning{'s' if warns != 1 else ''} at start-up" if warns else ""))
+        self.sidebar.setVisible(True)
+        self.sidebar.set_mode(SERVER_MODE)
+        self.server_banner.show()
+        self.navigate_by_id(self._pending_server_page)
+
+    def return_home(self):
+        """Back to the home network (Smart Home screens)."""
+        self.view_server_boot.stop()
+        self.server_banner.hide()
+        self.sidebar.setVisible(not self._immersive)
+        self.sidebar.set_mode(HOME_MODE)
+        self.navigate_by_id(self._last_home_page or "smart_dashboard")
 
     # ------------------------------------------------------------ accounts --
 
@@ -298,9 +424,9 @@ class MainWindow(QMainWindow):
         self.sidebar.set_user(self.user)
         if hasattr(self.view_settings, "set_account"):
             self.view_settings.set_account(self.auth, self.user)
-        current = MODULE_DEFINITIONS[self.stack.currentIndex()][0]
-        if not module_allowed(current, self.user.get("role")):
-            self.navigate_by_id("smart_dashboard")
+        if self.user.get("role") != "root" and (self.sidebar.mode == SERVER_MODE
+                                                 or self.stack.currentWidget() is self.view_server_boot):
+            self.return_home()
 
     def lock(self):
         """Hide everything behind the sign-in screen. Any account may unlock;
