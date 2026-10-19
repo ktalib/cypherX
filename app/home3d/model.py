@@ -10,6 +10,7 @@ Units: metres. x runs left → right, z runs back (north, kitchen) → front,
 y is up. A room is an axis-aligned rectangle (x, z, w, d).
 """
 import copy
+import time
 import json
 import uuid
 
@@ -108,9 +109,16 @@ DEFAULT_HOME = {
 }
 
 
+LIVE_FRESH_S = 30          # a plug reading older than this falls back to the rated watts
+
+
 class HomeModel:
     def __init__(self):
         self.data = self._load()
+        # called with (item_id, on) whenever an appliance is switched here, so a linked smart
+        # plug can follow (set by the main window)
+        self.switch_hook = None
+        self.live = {}             # item_id -> (watts measured by its smart plug, timestamp)
 
     # ------------------------------------------------------------ storage --
 
@@ -165,8 +173,21 @@ class HomeModel:
     def item(self, item_id):
         return next((i for i in self.items if i["id"] == item_id), None)
 
+    def live_w(self, item_id, now=None):
+        """Measured watts from the appliance's smart plug, or None when there's no fresh reading."""
+        r = self.live.get(item_id)
+        if r is None or (now or time.time()) - r[1] > LIVE_FRESH_S:
+            return None
+        return r[0]
+
+    def device_w(self, d):
+        live = self.live_w(d["id"])
+        if live is not None:
+            return live
+        return d["device"]["watts"] if d["device"]["on"] else 0
+
     def load_w(self, room_id=None):
-        return sum(d["device"]["watts"] for d in self.devices(room_id) if d["device"]["on"])
+        return sum(self.device_w(d) for d in self.devices(room_id))
 
     def daily_kwh(self):
         return sum(d["device"]["watts"] * d["device"]["hours"] for d in self.devices()) / 1000.0
@@ -184,8 +205,25 @@ class HomeModel:
     def set_on(self, item_id, on):
         it = self.item(item_id)
         if it and it.get("device"):
+            changed = it["device"]["on"] != bool(on)
             it["device"]["on"] = bool(on)
             self.save()
+            if changed and self.switch_hook:
+                self.switch_hook(item_id, bool(on))
+
+    def apply_reading(self, item_id, on=None, watts=None):
+        """A smart plug reported its real state: update without calling the switch hook back."""
+        it = self.item(item_id)
+        if not it or not it.get("device"):
+            return False
+        changed = False
+        if on is not None and it["device"]["on"] != bool(on):
+            it["device"]["on"] = bool(on)
+            changed = True
+            self.save()
+        if watts is not None:
+            self.live[item_id] = (float(watts), time.time())
+        return changed
 
     def toggle(self, item_id):
         it = self.item(item_id)
@@ -193,10 +231,15 @@ class HomeModel:
             self.set_on(item_id, not it["device"]["on"])
 
     def all_off(self, keep=("fridge",)):
+        switched = []
         for d in self.devices():
-            if d["id"] not in keep:
+            if d["id"] not in keep and d["device"]["on"]:
                 d["device"]["on"] = False
+                switched.append(d["id"])
         self.save()
+        if self.switch_hook:
+            for item_id in switched:
+                self.switch_hook(item_id, False)
 
     def update_device(self, item_id, **fields):
         it = self.item(item_id)

@@ -512,7 +512,8 @@ class SmartHomeView(QWidget):
                           f"{' · smart plug linked' if self.smart_book and self.smart_book.by_item(d['id']) else ''}"
                           "</span>")
             name.setStyleSheet("color:#e2e8f0;font-size:12px;font-weight:600;background:transparent;")
-            watts = QPushButton(f"{dev['watts']:g} W")
+            live = m.live_w(d["id"])
+            watts = QPushButton(f"{live:.0f} W live" if live is not None else f"{dev['watts']:g} W")
             watts.setCursor(Qt.PointingHandCursor)
             watts.setToolTip("Edit, or remove this appliance")
             watts.setStyleSheet("QPushButton{background:transparent;border:none;color:#7fd4ff;"
@@ -814,7 +815,9 @@ class SmartHomeView(QWidget):
         m.exec(QCursor.pos())
 
     def _reload(self):
+        hook = self.model.switch_hook
         self.model = HomeModel()
+        self.model.switch_hook = hook
         self.view.model = self.model
         self.view.reset_camera()
         self.refresh()

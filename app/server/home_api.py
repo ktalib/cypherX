@@ -64,7 +64,8 @@ class HomeApi:
                       "price": e.price_per_kwh()},
             "rooms": [{"id": r["id"], "name": r["name"], "load_w": m.load_w(r["id"])} for r in m.rooms],
             "devices": [{"id": d["id"], "name": d["name"], "room": names.get(d["room"], ""),
-                         "kind": d.get("kind"), "watts": d["device"]["watts"], "on": d["device"]["on"]}
+                         "kind": d.get("kind"), "watts": d["device"]["watts"], "on": d["device"]["on"],
+                         "live_w": m.live_w(d["id"])}
                         for d in sorted(m.devices(), key=lambda d: (d["room"], d["name"]))],
             "security": {
                 "armed": bool(cctv.store.config.get("armed")),

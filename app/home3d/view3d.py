@@ -634,7 +634,7 @@ class House3DView(QWidget):
                 path = QPainterPath(pts[0][0])
                 for q in pts[1:]:
                     path.lineTo(q[0])
-                watts = d["device"]["watts"]
+                watts = self.model.device_w(d) or d["device"]["watts"]
                 col = QColor(255, 181, 71) if watts >= 100 else QColor(127, 212, 255)
                 glow = QColor(col)
                 glow.setAlpha(50)
@@ -708,7 +708,9 @@ class House3DView(QWidget):
                     p.setBrush(QColor(150, 158, 170))
                     p.drawEllipse(a, 4, 4)
                     continue
-                txt = f"{d['name']}  ·  {d['device']['watts']:.0f} W"
+                live = self.model.live_w(d["id"])
+                txt = f"{d['name']}  ·  {live if live is not None else d['device']['watts']:.0f} W" \
+                      + ("  live" if live is not None else "")
                 self._tag(p, QPointF(a.x(), a.y() - 16), txt,
                           QColor(8, 40, 30, 215) if on else QColor(15, 18, 24, 190),
                           QColor(150, 255, 200) if on else QColor(170, 180, 195), f, False,
@@ -778,7 +780,9 @@ class House3DView(QWidget):
             self.setCursor(Qt.PointingHandCursor if it and it.get("device") else Qt.ArrowCursor)
             if it:
                 dev = it.get("device")
-                self.setToolTip(f"{it['name']} — {dev['watts']:.0f} W, {'ON' if dev['on'] else 'off'}"
+                live = self.model.live_w(it["id"])
+                self.setToolTip(f"{it['name']} — {live if live is not None else dev['watts']:.0f} W"
+                                f"{' (measured)' if live is not None else ''}, {'ON' if dev['on'] else 'off'}"
                                 f"  ·  click to switch" if dev else it["name"])
             else:
                 self.setToolTip("")

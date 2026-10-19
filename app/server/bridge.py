@@ -35,6 +35,10 @@ class GuiBridge(QObject):
         finally:
             job.done.set()
 
+    def post(self, fn):
+        """Run fn on the GUI thread later; don't wait (safe while the GUI thread waits for us)."""
+        self._submit.emit(_Job(fn))
+
     def call(self, fn, timeout=8.0):
         app = QCoreApplication.instance()
         if app is None or QThread.currentThread() is self.thread():

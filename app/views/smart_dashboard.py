@@ -432,9 +432,9 @@ class ApplianceTile(QFrame):
         if e.button() == Qt.LeftButton and self.rect().contains(e.position().toPoint()):
             self.clicked.emit(self.item_id)
 
-    def set_item(self, it, room_name):
+    def set_item(self, it, room_name, live=None):
         dev = it["device"]
-        sig = (it["name"], room_name, dev["watts"], dev["on"])
+        sig = (it["name"], room_name, dev["watts"], dev["on"], None if live is None else round(live))
         if sig == self._sig:
             return
         self._sig = sig
@@ -446,7 +446,7 @@ class ApplianceTile(QFrame):
         self.state.setStyleSheet(f"color:{GOOD if on else DIM};font-size:10px;font-weight:800;"
                                  "letter-spacing:0.8px;background:transparent;border:none;")
         self.name.setText(it["name"])
-        self.sub.setText(f"{room_name}  ·  {dev['watts']:g} W")
+        self.sub.setText(f"{room_name}  ·  {live:.0f} W live" if live is not None else f"{room_name}  ·  {dev['watts']:g} W")
         n = self.objectName()
         if on:
             self.setStyleSheet(f"QFrame#{n}{{background:rgba(16,185,129,0.13);border:1px solid "
@@ -914,7 +914,7 @@ class SmartDashboardView(QWidget):
                     t.deleteLater()
             self.app_tiles = keep
         for d in devices:
-            self.app_tiles[d["id"]].set_item(d, names.get(d["room"], ""))
+            self.app_tiles[d["id"]].set_item(d, names.get(d["room"], ""), m.live_w(d["id"]))
         on = sum(1 for d in devices if d["device"]["on"])
         self.app_count.setText(f"{on} on · tap to switch")
 

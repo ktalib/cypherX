@@ -72,12 +72,27 @@ class DeviceCard(QFrame):
         self.link.currentIndexChanged.connect(self._linked)
         row.addWidget(self.link, 1)
         lo.addLayout(row)
+        live_row = QHBoxLayout()
+        self.live = _lbl("", TEXT, 12, 700)
+        live_row.addWidget(self.live, 1)
+        self.key_btn = QPushButton(" Set local key…")
+        self.key_btn.setIcon(hicon("lock", "#e2e8f0", 13))
+        self.key_btn.setCursor(Qt.PointingHandCursor)
+        self.key_btn.clicked.connect(lambda: view.set_key(dev_id))
+        self.switch_btn = QPushButton()
+        self.switch_btn.setCursor(Qt.PointingHandCursor)
+        self.switch_btn.setMinimumWidth(96)
+        self.switch_btn.clicked.connect(lambda: view.switch(dev_id))
+        live_row.addWidget(self.key_btn)
+        live_row.addWidget(self.switch_btn)
+        lo.addLayout(live_row)
         self.control = _lbl("", DIM, 10, 500)
         self.control.setWordWrap(True)
         lo.addWidget(self.control)
         self._filling = False
 
-    def sync(self, d, online, appliances):
+    def sync(self, d, online, appliances, plug=None):
+        """plug: (controllable, why_not, reading or None, error or None)"""
         kind = d.get("kind", "")
         icon = next((v for k, v in KIND_ICON.items() if k in kind), "plug")
         linked = d.get("linked_item")
@@ -97,7 +112,39 @@ class DeviceCard(QFrame):
             bits.append(f"protocol v{ver}")
         bits.append(f"seen {_ago(d.get('last_seen'))}")
         self.details.setText("  ·  ".join(bits))
-        self.control.setText(d.get("control", ""))
+        ok, why, rd, err = plug or (False, "", None, None)
+        linked_now = bool(d.get("linked_item"))
+        self.key_btn.setVisible(d.get("protocol") == "tuya")
+        self.key_btn.setText(" Change key…" if d.get("local_key") else " Set local key…")
+        if ok and rd and not err:
+            state = "ON" if rd["on"] else "OFF" if rd["on"] is False else "?"
+            bits = [state]
+            if rd.get("power_w") is not None:
+                bits.append(f"{rd['power_w']:.0f} W")
+            if rd.get("voltage"):
+                bits.append(f"{rd['voltage']:.0f} V")
+            self.live.setText("  ·  ".join(bits))
+            self.live.setStyleSheet(f"color:{GOOD if rd['on'] else SOFT};font-size:12px;font-weight:700;"
+                                    "background:transparent;")
+        elif ok and err:
+            self.live.setText("Not answering — check it's powered and on the Wi-Fi")
+            self.live.setStyleSheet(f"color:{WARN};font-size:11px;font-weight:600;background:transparent;")
+        elif ok:
+            self.live.setText("Connecting…" if linked_now else "Ready — link it to an appliance to start reading it")
+            self.live.setStyleSheet(f"color:{MUTED};font-size:11px;font-weight:600;background:transparent;")
+        else:
+            self.live.setText(f"Can't control yet: {why}" if why else "")
+            self.live.setStyleSheet(f"color:{MUTED};font-size:11px;font-weight:600;background:transparent;")
+        is_on = bool(rd and rd.get("on"))
+        self.switch_btn.setVisible(ok and linked_now)
+        self.switch_btn.setText("Turn off" if is_on else "Turn on")
+        self.switch_btn.setStyleSheet(
+            "QPushButton{background:rgba(255,255,255,0.08);color:#e2e8f0;border:1px solid rgba(255,255,255,0.16);"
+            "border-radius:14px;padding:5px 12px;font-weight:700;}" if is_on else
+            f"QPushButton{{background:{GOOD};color:#04140d;border:none;border-radius:14px;padding:5px 12px;"
+            "font-weight:800;}")
+        self.control.setText(d.get("control", "") if not ok else
+                             "Controlled by CYPHER-X — switching the appliance anywhere switches this plug.")
         self._filling = True
         self.link.clear()
         self.link.addItem("— not linked —", None)
@@ -121,6 +168,7 @@ class SmartDevicesView(QWidget):
         super().__init__(parent)
         self.manager = manager
         self.svc = manager.get("discovery")
+        self.plugs = manager.get("plugs")
         self.book = self.svc.book
         self.home = smart_home
         self.cards = {}
@@ -145,6 +193,7 @@ class SmartDevicesView(QWidget):
         self.summary = _lbl("", MUTED, 11, 600)
         tb.addWidget(self.summary, 1)
         self.start_btn = _action("Start discovery", "play", self._start, primary=True)
+        tb.addWidget(_action("Import Tuya keys…", "lock", self.import_keys))
         tb.addWidget(self.start_btn)
         main.addWidget(bar)
 
@@ -202,7 +251,8 @@ class SmartDevicesView(QWidget):
         self.empty_status.setText("Discovery is running — waiting for devices…" if running else
                                   "Discovery is off. Press Start discovery.")
         appliances = self._appliances()
-        sig = (tuple(sorted((k, d.get("last_seen", 0) // 30, d.get("label"), d.get("linked_item"), online[k])
+        sig = (tuple(sorted((k, d.get("last_seen", 0) // 30, d.get("label"), d.get("linked_item"), online[k],
+                             bool(d.get("local_key")), self._plug_sig(k))
                             for k, d in devices.items())), tuple(appliances))
         if sig == self._sig:
             return
@@ -217,11 +267,101 @@ class SmartDevicesView(QWidget):
         for i, k in enumerate(order):
             card = self.cards.get(k) or DeviceCard(self, k)
             self.cards[k] = card
-            card.sync(devices[k], online[k], appliances)
+            card.sync(devices[k], online[k], appliances, self._plug_state(k, devices[k]))
             self.grid.addWidget(card, i // cols, i % cols)
         self.grid.setRowStretch(len(order) // cols + 1, 1)
 
+    def _plug_state(self, dev_id, dev):
+        from app.server.plugs import can_control
+        ok, why = can_control(dev)
+        r = self.plugs.readings.get(dev_id, {}) if self.plugs else {}
+        if ok and (self.plugs is None or self.plugs.status != "running"):
+            return False, "Smart plug control service is stopped (Server → Services)", None, None
+        return ok, why, r.get("reading"), r.get("error")
+
+    def _plug_sig(self, dev_id):
+        r = (self.plugs.readings.get(dev_id, {}) if self.plugs else {})
+        rd = r.get("reading") or {}
+        return (rd.get("on"), round(rd.get("power_w") or 0), bool(r.get("error")))
+
     # --------------------------------------------------------------- actions --
+
+    def switch(self, dev_id):
+        dev = self.book.devices.get(dev_id, {})
+        item = dev.get("linked_item")
+        if not item:
+            return
+        rd = (self.plugs.readings.get(dev_id, {}) or {}).get("reading") or {}
+        want = not bool(rd.get("on"))
+        self.home.model.set_on(item, want)            # the switch hook sends it to the plug
+        self.home.refresh()
+
+    def set_key(self, dev_id):
+        dev = self.book.devices.get(dev_id, {})
+        key, ok = QInputDialog.getText(
+            self, "Local key", f"Local key for {self.book.label(dev_id)}\n"
+            "(16 characters, from Import Tuya keys or the tinytuya wizard):",
+            text=dev.get("local_key", ""))
+        if not ok:
+            return
+        key = key.strip()
+        if key and len(key) != 16 and QMessageBox.question(
+                self, "Local key", f"Tuya keys are normally 16 characters; this one has {len(key)}. Use it anyway?") \
+                != QMessageBox.Yes:
+            return
+        self.book.set_key(dev_id, key)
+        self._sig = None
+        self.refresh()
+
+    def import_keys(self):
+        from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QApplication
+        from app.server.plugs import fetch_tuya_keys, PlugError
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Import Tuya keys")
+        form = QFormLayout(dlg)
+        help_ = QLabel("One-time set-up, free:\n"
+                       "1. Sign up at iot.tuya.com → Cloud → Development → Create Cloud Project\n"
+                       "   (pick your data centre, e.g. Central Europe; add the IoT Core API).\n"
+                       "2. In the project: Devices → Link App Account → scan the QR code with the Smart Life app.\n"
+                       "3. Copy the Access ID and Access Secret from the project overview here.\n"
+                       "CYPHER-X asks the Tuya cloud once for each plug's local key; after that everything is local.")
+        help_.setWordWrap(True)
+        help_.setStyleSheet(f"color:{SOFT};font-size:11px;")
+        form.addRow(help_)
+        region = QComboBox()
+        for code, label in (("eu", "Central Europe (eu)"), ("eu-w", "Western Europe (eu-w)"), ("us", "Western America (us)"),
+                            ("us-e", "Eastern America (us-e)"), ("in", "India (in)"), ("cn", "China (cn)")):
+            region.addItem(label, code)
+        api_key, api_secret = QLineEdit(), QLineEdit()
+        api_secret.setEchoMode(QLineEdit.Password)
+        form.addRow("Data centre", region)
+        form.addRow("Access ID", api_key)
+        form.addRow("Access Secret", api_secret)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+        if dlg.exec() != QDialog.Accepted or not api_key.text().strip() or not api_secret.text().strip():
+            return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            keys = fetch_tuya_keys(region.currentData(), api_key.text().strip(), api_secret.text().strip())
+        except PlugError as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(self, "Import Tuya keys", str(e))
+            return
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(self, "Import Tuya keys", f"Couldn't reach the Tuya cloud: {e}")
+            return
+        QApplication.restoreOverrideCursor()
+        applied, pending = self.book.import_tuya_keys(keys)
+        msg = f"Got keys for {len(keys)} device(s).\n\nReady now: " + (", ".join(applied) or "none")
+        if pending:
+            msg += "\nSaved for later (not seen on the Wi-Fi yet): " + ", ".join(pending)
+        QMessageBox.information(self, "Import Tuya keys", msg)
+        self._sig = None
+        self.refresh()
 
     def _start(self):
         if self.svc.status != "running":

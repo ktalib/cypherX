@@ -95,7 +95,13 @@ themselves — press **Start discovery**:
 - Requirements: pair the device in its own app first, keep it on the same 2.4 GHz Wi-Fi as the PC (not a guest
   network), allow CYPHER-X through Windows Firewall on Private networks. `cryptography` and `zeroconf` (in
   requirements.txt) enable Tuya 3.3+ and mDNS.
-- Next step: control and live watts — Tuya needs each device's local key, fetched once.
+- **Control + live power**: a linked plug is switched for real whenever its appliance is switched — in the app,
+  the 3D view, the web dashboard or Telegram — and the *Smart plug control* service reads it every 5 s. Measured
+  watts replace the rated watts in the live load, battery runtime and cost (shown as "146 W live").
+  - Shelly, Tasmota and TP-Link Kasa work straight away (no key).
+  - Tuya / Smart Life needs each plug's **local key**: press **Import Tuya keys…** (one-time, free Tuya IoT
+    developer account linked to your Smart Life app — the dialog walks you through it), or paste a key with
+    *Set local key…*. Keys for plugs not seen yet are kept and applied when they show up. Needs `tinytuya`.
 
 ## Home Dashboard
 

@@ -216,11 +216,14 @@ class SmartDeviceBook:
     def __init__(self, path=SMART_FILE):
         self.path = path
         self.devices = {}
+        self.pending_keys = {}     # Tuya device id -> local key, imported before the device was seen
         self._lock = threading.Lock()
         self._file_lock = threading.Lock()
         try:
             with open(path, "r", encoding="utf-8") as f:
-                self.devices = json.load(f).get("devices", {})
+                stored = json.load(f)
+            self.devices = stored.get("devices", {})
+            self.pending_keys = stored.get("pending_keys", {})
         except (OSError, ValueError):
             pass
 
@@ -229,7 +232,7 @@ class SmartDeviceBook:
         # each through its own temp file
         with self._file_lock:
             with self._lock:
-                data = json.dumps({"devices": self.devices}, indent=2)
+                data = json.dumps({"devices": self.devices, "pending_keys": self.pending_keys}, indent=2)
             tmp = self.path.with_name(f"{self.path.stem}.{threading.get_ident()}.tmp")
             with open(tmp, "w", encoding="utf-8") as f:
                 f.write(data)
@@ -254,6 +257,9 @@ class SmartDeviceBook:
                 if v not in ("", None) or k not in known:
                     known[k] = v
             known["last_seen"] = now
+            tuya_id = (known.get("extra") or {}).get("device_id")
+            if tuya_id and tuya_id in self.pending_keys and not known.get("local_key"):
+                known["local_key"] = self.pending_keys.pop(tuya_id)
         self.save()
         return new
 
@@ -283,6 +289,30 @@ class SmartDeviceBook:
         with self._lock:
             self.devices.pop(dev_id, None)
         self.save()
+
+    def set_key(self, dev_id, key):
+        if dev_id in self.devices:
+            self.devices[dev_id]["local_key"] = key.strip()
+            self.save()
+
+    def import_tuya_keys(self, keys):
+        """keys: {tuya_device_id: {"key", "name"}} from the Tuya cloud. Applies them to known
+        devices and keeps the rest for when those devices show up. Returns (applied, pending)."""
+        applied, pending = [], []
+        with self._lock:
+            for tid, info in keys.items():
+                dev_id = next((k for k, d in self.devices.items()
+                               if (d.get("extra") or {}).get("device_id") == tid), None)
+                if dev_id:
+                    self.devices[dev_id]["local_key"] = info["key"]
+                    if info.get("name") and not self.devices[dev_id].get("label"):
+                        self.devices[dev_id]["label"] = info["name"]
+                    applied.append(info.get("name") or tid)
+                else:
+                    self.pending_keys[tid] = info["key"]
+                    pending.append(info.get("name") or tid)
+        self.save()
+        return applied, pending
 
     def by_item(self, item_id):
         return next((k for k, d in self.devices.items() if d.get("linked_item") == item_id), None)

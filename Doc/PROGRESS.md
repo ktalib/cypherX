@@ -17,11 +17,11 @@ home's power system, cameras and (soon) smart plugs.
 | Server console with boot checks | Built and merged ([#5](https://github.com/ktalib/cypherX/pull/5)) |
 | Server features: services + watchdog, web dashboard, Telegram bot, network watch, backups | Built, pushed — **pull request not opened yet** |
 | Smart device discovery (Tuya, Kasa, Shelly, Tasmota, mDNS) + Smart Devices page | Built, pushed — pull request not opened yet |
-| Smart plug control + live watts | Next — needs the plugs (Tuya local keys) |
+| Smart plug control + live watts (Tuya, Shelly, Tasmota, Kasa) | Built, pushed — tested with simulated plugs; needs the real plugs |
 | Inverter data | Waiting — check the back panel for a data port |
 | Tested on the Windows laptop | **Not yet** — everything so far was tested on a Linux cloud machine |
 
-**Codebase:** about 26,800 lines (Python / PySide6 + one HTML page for phones), 66 unit tests (65 pass — see §5).
+**Codebase:** about 27,900 lines (Python / PySide6 + one HTML page for phones), 74 unit tests (73 pass — see §5).
 
 ---
 
@@ -36,6 +36,7 @@ home's power system, cameras and (soon) smart plugs.
 | 5 | 19 Oct | [#5](https://github.com/ktalib/cypherX/pull/5) | **Server console** — Server button opens a boot screen with 8 real checks (launch, root access, system health, network, database, storage, updates, services), then a separate green server sidebar with a "Return to Home" button; this progress report |
 | 6 | 19 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Server features (roadmap 1–5)** — service manager with watchdog and a Services page; **web dashboard** for phones on the Wi-Fi; **Telegram bot** (alerts + commands); **network watch** with a Wi-Fi Devices page and new-device alerts; **nightly backups** with restore |
 | 7 | 19 Oct | _same branch, not opened yet_ | **Smart device discovery** — finds Tuya / Smart Life plugs, sockets, bulbs and switches from their broadcasts (protocol 3.1 / 3.3 / 3.5), TP-Link Kasa, Shelly / ESPHome / Sonoff / HomeKit via mDNS, Shelly / Tasmota via HTTP; **Smart Devices** page to name devices and link each to its appliance |
+| 8 | 19 Oct | _same branch, not opened yet_ | **Smart plug control** — linked plugs switch for real from the app, 3D view, web dashboard and Telegram; live watts / volts read every 5 s replace the estimates; Tuya local keys by paste or **Import Tuya keys** from the Tuya cloud (once); drivers for Tuya (tinytuya), Shelly gen 1/2, Tasmota, TP-Link Kasa |
 
 ---
 
@@ -84,7 +85,7 @@ start automatically, settings, actions and its own log. A **watchdog** restarts 
 
 | Device | Can the app read it? | Plan |
 |---|---|---|
-| Tuya 20A smart plugs (being bought) | **Discovery built** — found automatically from their Wi-Fi broadcasts; control + live watts need each plug's local key | When they arrive: pair in Smart Life → they appear on Smart Devices → link to appliances → next build: local-key wizard + control |
+| Tuya 20A smart plugs (being bought) | **Discovery + control built** — found from their Wi-Fi broadcasts; switched and read locally once each plug's key is imported | When they arrive: pair in Smart Life → Start discovery → Import Tuya keys → link to appliances → check real watts |
 | Ikeja Electric prepaid meter (split meter) | No data port | Manual tracker built (tokens + readings). Optional: Tuya clamp meter fitted by an electrician after the meter |
 | Solar charge controller (PWM) | Probably no data port | Manual battery readings built. Optional: Bluetooth battery monitor (shunt) |
 | Invertek Mega+ inverter | Unknown | **Open question:** check the back panel for a USB / RS232 / RJ45 "COM" port |
@@ -95,15 +96,17 @@ start automatically, settings, actions and its own log. A **watchdog** restarts 
 
 ## 5. Testing
 
-- **Unit tests:** 66 (energy log 9, smart device discovery 9, CCTV 7, network watch + backups 7,
-  accounts/bills/groceries 6, service manager 6, Telegram 6, server checks 5, web dashboard 5, original 6). 65 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
+- **Unit tests:** 74 (energy log 9, smart device discovery 9, plug control 8, CCTV 7, network watch + backups 7,
+  accounts/bills/groceries 6, service manager 6, Telegram 6, server checks 5, web dashboard 5, original 6). 73 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
   tests run on Linux (`C:\Windows` isn't an absolute path there).
 - **App checks:** each feature was run headless on a Linux cloud machine with sample data and screenshotted —
   layouts, navigation between Home and Server, sign-in, roles, lock, motion detection with synthetic frames.
   The web dashboard was driven in a real browser (Chromium, phone size): sign-in, switching an appliance (the
   desktop updated), a meter reading, all four tabs. Telegram was tested against a fake Telegram server
   (this cloud machine can't reach the real one). Smart device discovery was tested with hand-built Tuya
-  broadcasts (all three formats) sent to the real UDP ports, and a fake Kasa plug answering on UDP.
+  broadcasts (all three formats) sent to the real UDP ports, and a fake Kasa plug answering on UDP. Plug control
+  was tested end to end with a simulated Tuya plug: switching from the Smart Devices card, the web API and a
+  Telegram command each switched the plug, and its measured watts replaced the rated watts in the load.
 - **Not tested yet (needs the Windows laptop):** real webcam, recording, RTSP streams, charger-based power-cut
   detection, Windows notifications, the registry-based Startup Manager, everything at real screen sizes, the web
   dashboard from a real phone (Windows Firewall will ask once — allow Private networks), the real Telegram bot,
@@ -159,6 +162,6 @@ Proposed on 19 October. **1–5 are built** (§3, "Server features"); the rest a
    create a Telegram bot with @BotFather and pair it; run a network scan; check webcam / CCTV, power-cut
    detection and notifications.
 3. Check the inverter's back panel for a data port.
-4. When the Tuya plugs arrive: pair them in Smart Life, press Start discovery on Smart Devices, link each to
-   its appliance. Then build: local-key wizard, real on/off and live watts replacing the estimates.
+4. When the Tuya plugs arrive: pair them in Smart Life, `pip install -r requirements.txt`, Start discovery on
+   Smart Devices, Import Tuya keys, link each plug to its appliance, then check switching and real watts.
 5. Continue the roadmap: 6 (power-saving on battery), 7 (internet uptime + data bundle), 8 (status page).

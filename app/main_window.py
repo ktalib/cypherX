@@ -26,6 +26,7 @@ from app.server.web import WebService
 from app.server.telegram import TelegramService
 from app.server.netwatch import NetWatchService
 from app.server.discovery import DiscoveryService
+from app.server.plugs import PlugService
 from app.views.smart_devices import SmartDevicesView
 from app.server.backup import BackupService, backup_check
 from app.views.lan_devices import LanDevicesView
@@ -415,6 +416,11 @@ class MainWindow(QMainWindow):
                                     if netwatch.book.online(m) and d.get("ip")],
             on_found=mark_on_wifi_list))
         self.view_smart_home.smart_book = self.discovery.book
+
+        # Smart plugs follow the appliances, and report real state + watts back
+        self.plugs = self.services.register(PlugService(
+            self.discovery.book, lambda item, on, w: self.bridge.post(lambda: self._apply_plug(item, on, w))))
+        self.view_smart_home.model.switch_hook = lambda item, on: self.plugs.request(item, on)
         self.backup_service = self.services.register(
             BackupService(bus, extra_actions=[("Restore from a backup…", self._restore_backup)]))
 
@@ -446,6 +452,14 @@ class MainWindow(QMainWindow):
         self.quit_app()
         QApplication.quit()
         return None
+
+    def _apply_plug(self, item_id, on, watts):
+        home = self.view_smart_home
+        before = home.model.live_w(item_id)
+        changed = home.model.apply_reading(item_id, on, watts)
+        moved = watts is not None and (before is None or abs(before - watts) >= 3)
+        if changed or moved:
+            home.refresh()
 
     def _watchdog(self):
         for sid in self.services.watchdog():
