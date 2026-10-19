@@ -1,0 +1,14 @@
+{
+  "name": "CYPHER-X Home",
+  "short_name": "CYPHER-X",
+  "description": "Your smart home on your phone",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#060b12",
+  "theme_color": "#060b12",
+  "icons": [
+    {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}
