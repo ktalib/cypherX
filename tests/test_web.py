@@ -196,12 +196,15 @@ class TestCertificate(unittest.TestCase):
 
     def test_reused_until_the_address_changes(self):
         from app.server.tls import ensure_certificate
+        def read(path):
+            with open(path, "rb") as f:
+                return f.read()
         cert, _ = ensure_certificate(["192.168.1.20"], folder=self.dir)
-        first = open(cert, "rb").read()
+        first = read(cert)
         ensure_certificate(["192.168.1.20"], folder=self.dir)
-        self.assertEqual(open(cert, "rb").read(), first)
+        self.assertEqual(read(cert), first)
         ensure_certificate(["192.168.1.31"], folder=self.dir)     # PC got a new address → new certificate
-        self.assertNotEqual(open(cert, "rb").read(), first)
+        self.assertNotEqual(read(cert), first)
 
 
 if __name__ == "__main__":

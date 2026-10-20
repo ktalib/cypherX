@@ -79,6 +79,11 @@ def _passed_this_period(freq, due_day, today=None):
     return date(t.year, m, min(int(due_day), calendar.monthrange(t.year, m)[1])) < t
 
 
+
+# Called as hook(name, qty) when a grocery item is ticked bought (qty < 0 when un-ticked).
+# The fridge stock uses it so buying eggs adds them to the fridge.
+BOUGHT_HOOKS = []
+
 class BudgetService:
     def __init__(self, db):
         self.db = db
@@ -241,12 +246,21 @@ class BudgetService:
         sets = {k: v for k, v in fields.items() if k in ("name", "qty", "unit_price", "category", "bought")}
         if not sets:
             return
+        before = self._q("SELECT name, qty, bought FROM grocery_items WHERE id = ?", (item_id,)) \
+            if "bought" in sets else None
         cols = ", ".join(f"{k} = ?" for k in sets)
         self._q(f"UPDATE grocery_items SET {cols} WHERE id = ?", (*sets.values(), item_id), commit=True)
         if "unit_price" in sets or "name" in sets:
             it = self._q("SELECT name, unit_price, category FROM grocery_items WHERE id = ?", (item_id,))
             if it and it[0]["unit_price"]:
                 self.remember_price(it[0]["name"], it[0]["unit_price"], it[0]["category"])
+        if before and bool(before[0]["bought"]) != bool(sets["bought"]):
+            sign = 1 if sets["bought"] else -1
+            for hook in list(BOUGHT_HOOKS):
+                try:
+                    hook(before[0]["name"], sign * float(before[0]["qty"] or 1))
+                except Exception:
+                    pass
 
     def remove_item(self, item_id):
         self._q("DELETE FROM grocery_items WHERE id = ?", (item_id,), commit=True)

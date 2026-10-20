@@ -180,6 +180,18 @@
   .pcam-row .grow { flex: 1; min-width: 0; font-size: 12px; }
   .note { font-size: 13px; line-height: 1.45; color: var(--muted); background: var(--surface2); border-radius: 14px; padding: 12px 14px; }
   a.btn { display: block; text-align: center; text-decoration: none; }
+  label.btn { display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+  .btn.busy { opacity: .6; pointer-events: none; }
+  #frResult { white-space: pre-line; }
+  .qty { flex: none; width: 38px; height: 38px; border-radius: 12px; background: var(--surface2); font-size: 20px;
+    font-weight: 700; display: grid; place-items: center; line-height: 1; }
+  .qty:active { transform: scale(.92); }
+  .fr-row .num { min-width: 46px; text-align: center; font-size: 20px; font-weight: 600; white-space: nowrap; }
+  .fr-row.low .num, .fr-row.low .grow b { color: var(--bad); }
+  .fr-add { display: flex; gap: 8px; padding: 10px; }
+  .fr-add #frName { flex: 1; min-width: 0; }
+  .fr-add #frCount { width: 78px; flex: none; }
+  .fr-add .btn { width: auto; padding: 12px 18px; flex: none; }
   .pc-pill { position: fixed; z-index: 31; right: 14px; bottom: calc(var(--tab-h) + var(--safe-b) + 12px); display: inline-flex; gap: 6px;
     align-items: center; padding: 8px 12px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 12px; font-weight: 700;
     box-shadow: 0 6px 20px rgba(0,0,0,.35); border: none; }
@@ -405,6 +417,38 @@
     </section>
 
     <!-- MONEY -->
+    <!-- FRIDGE -->
+    <section class="view hidden" id="v-fridge">
+      <div class="card">
+        <div class="pcam-head">
+          <div class="ico"><svg class="ic lg"><use href="#i-fridge"/></svg></div>
+          <div style="flex:1"><b style="font-size:16px">What's in the fridge</b><br>
+            <span class="muted" style="font-size:13px" id="frAi"></span></div>
+        </div>
+        <label class="btn" id="frPhotoBtn" style="margin-top:14px"><svg class="ic sm"><use href="#i-camera"/></svg>Check with a photo
+          <input type="file" id="frFile" accept="image/*" capture="environment" hidden></label>
+        <div class="note hidden" id="frResult" style="margin-top:10px" role="status"></div>
+      </div>
+      <div class="desk2">
+        <div style="display:grid;gap:12px;align-content:start">
+          <div class="section-title">In the fridge <span id="frSum" style="color:var(--bad)"></span></div>
+          <div class="card list" id="frList"></div>
+          <form class="card fr-add" id="frAdd">
+            <input id="frName" maxlength="40" placeholder="Track another item, e.g. Malt" aria-label="Item name">
+            <input id="frCount" type="number" inputmode="numeric" min="0" max="999" placeholder="0" aria-label="How many">
+            <button class="btn" type="submit">Add</button>
+          </form>
+        </div>
+        <div style="display:grid;gap:12px;align-content:start">
+          <div class="section-title">Last photo</div>
+          <div class="card" style="padding:10px">
+            <div class="cam"><img id="frImg" alt="Last fridge photo"><div class="empty" id="frEmpty">No photo yet</div></div>
+            <div class="muted" style="font-size:12px;padding:10px 6px 2px" id="frWhen"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="view hidden" id="v-money">
       <div class="grid2">
         <div class="card stat"><small>Bills / month</small><b id="billsMonth">—</b><span id="billsSub"></span></div>
@@ -444,6 +488,7 @@
     <button data-tab="home" class="active"><svg class="ic"><use href="#i-home"/></svg>Home</button>
     <button data-tab="devices"><svg class="ic"><use href="#i-plug"/></svg>Devices</button>
     <button data-tab="security"><svg class="ic"><use href="#i-shield"/></svg>Security</button>
+    <button data-tab="fridge"><svg class="ic"><use href="#i-fridge"/></svg>Fridge</button>
     <button data-tab="money"><svg class="ic"><use href="#i-wallet"/></svg>Money</button>
     <button data-tab="server" id="tabServer" class="hidden"><svg class="ic"><use href="#i-server"/></svg>Server</button>
   </nav>
@@ -550,6 +595,7 @@ async function refresh(manual) {
     if (tab === "home") renderHome(s);
     if (tab === "devices") renderDevices(s);
     if (tab === "security") { renderSecurity(s); pcCheck(); if (manual || !$("camImg").src) loadCam(); }
+    if (tab === "fridge") renderFridge(await api("fridge"));
     if (tab === "money") renderMoney(await api("bills"), await api("groceries"));
     if (tab === "server") renderServer(await api("server"));
   } catch (e) { quiet(e); }
@@ -752,6 +798,76 @@ async function pcLoop() {
     await sleep(Math.max(0, PC_EVERY_MS - (Date.now() - started)));
   }
 }
+
+/* ---------------- fridge ---------------- */
+function renderFridge(f) {
+  $("frAi").textContent = f.ai.ready ? `Photos are counted by ${f.ai.provider}`
+    : "No AI set up yet — photos are kept and you correct the counts with − / +";
+  const low = f.items.filter(v => v.low);
+  $("frSum").textContent = low.length ? `${low.length} running low` : "";
+  $("frList").innerHTML = f.items.length ? f.items.map(v => {
+    const shown = v.rate && Math.abs(v.estimate - v.count) >= 0.5 ? "≈" + Math.round(v.estimate) : String(v.count);
+    const detail = v.rate ? `${v.rate.toFixed(1)} a day · ${v.days_left < 1 ? "runs out today" : v.days_left < 2 ? "runs out tomorrow"
+      : "runs out in " + Math.round(v.days_left) + " days"}`
+      : "learning how fast it goes";
+    return `<div class="li fr-row ${v.low ? "low" : ""}">
+      <div class="grow"><b>${esc(v.name)}</b><small>${v.low ? "Running low · " : ""}${esc(detail)}</small></div>
+      <button class="qty" data-fr="${esc(v.id)}" data-d="-1" aria-label="Took one ${esc(v.name)}">−</button>
+      <span class="num">${shown}</span>
+      <button class="qty" data-fr="${esc(v.id)}" data-d="1" aria-label="Added one ${esc(v.name)}">+</button></div>`;
+  }).join("") : `<div class="li"><div class="grow"><b>Nothing tracked yet</b><small>Check a photo of the open fridge</small></div></div>`;
+  if (f.last) {
+    $("frWhen").textContent = [f.last.provider || "Not counted", ago(f.last.ts), f.last.note].filter(Boolean).join(" · ");
+    if (f.last.has_photo && $("frImg").dataset.ts !== String(f.last.ts)) {
+      $("frImg").dataset.ts = String(f.last.ts); $("frImg").src = "/api/fridge/photo.jpg?t=" + f.last.ts;
+    }
+  }
+}
+$("frImg").onload = () => $("frEmpty").classList.add("hidden");
+$("frList").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-fr]"); if (!b) return;
+  tap();
+  try { await api(`fridge/${encodeURIComponent(b.dataset.fr)}/adjust`, {delta: Number(b.dataset.d)}); refresh(); }
+  catch (err) { quiet(err); }
+});
+$("frAdd").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("frName").value.trim(); if (!name) return;
+  try {
+    await api("fridge/add", {name, count: Number($("frCount").value || 0)});
+    $("frName").value = ""; $("frCount").value = ""; toast(name + " added"); refresh();
+  } catch (err) { quiet(err); }
+});
+async function shrinkPhoto(file, max) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i);
+      i.onerror = () => bad(new Error("That file isn't a picture")); i.src = url; });
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+  } finally { URL.revokeObjectURL(url); }
+}
+$("frFile").addEventListener("change", async () => {
+  const file = $("frFile").files[0]; $("frFile").value = "";
+  if (!file) return;
+  const btn = $("frPhotoBtn"), out = $("frResult");
+  btn.classList.add("busy"); out.classList.remove("hidden");
+  out.textContent = "Counting what's in the photo… (the AI can take up to a minute)";
+  try {
+    const blob = await shrinkPhoto(file, 1600);
+    const r = await fetch("/api/fridge/photo", {method: "POST", headers: {"Content-Type": "image/jpeg"}, body: blob});
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 401) { showLogin(); return; }
+    if (!r.ok) throw new Error(d.error || "Couldn't count the photo");
+    out.textContent = d.manual ? "Photo saved. No AI is set up, so correct the counts with − / +."
+      : `Counted by ${d.provider}:\n${d.text}` + (d.note ? `\n\nNote: ${d.note}` : "");
+    tap(); refresh();
+  } catch (e) { out.textContent = e.message === "Failed to fetch" ? "Can't reach CYPHER-X" : e.message; }
+  finally { btn.classList.remove("busy"); }
+});
 
 /* ---------------- money ---------------- */
 function renderMoney(b, g) {

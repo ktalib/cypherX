@@ -204,6 +204,83 @@ class HomeApi:
             return {"ok": True}
         return self._gui(do)
 
+    # ------------------------------------------------------------- fridge --
+    # The fridge store is thread-safe, so these run on the caller's thread: a photo
+    # check can take a minute and must not hold the GUI thread.
+
+    def fridge(self):
+        from app.services import vision_ai
+        f = self.w.fridge
+        settings = vision_ai.load_settings(Database.get_instance())
+        ok, why = vision_ai.ready(settings)
+        last = f.last_check()
+        return {
+            "items": [{k: v[k] for k in ("id", "name", "count", "estimate", "rate", "days_left", "low", "low_at",
+                                         "source", "updated")} for v in f.items()],
+            "ai": {"ready": ok, "why": why,
+                   "provider": vision_ai.PROVIDERS.get(settings.get("provider") or "none", {}).get("title", "")},
+            "last": {"ts": last["ts"], "note": last["note"], "counts": last["counts"], "has_photo": bool(last["photo"]),
+                     "provider": vision_ai.PROVIDERS.get(last["provider"], {}).get("title", "")} if last else None,
+        }
+
+    def fridge_photo_jpeg(self):
+        last = self.w.fridge.last_check()
+        if not last or not last.get("photo"):
+            return None
+        try:
+            with open(last["photo"], "rb") as fh:
+                return fh.read()
+        except OSError:
+            return None
+
+    def fridge_check(self, image, who):
+        """Count a photo with the chosen AI. Raises ApiError with the reason when it can't."""
+        from app.server.web import ApiError
+        from app.services import vision_ai
+        from app.services.fridge_service import run_photo_check, changes_text
+        try:
+            res = run_photo_check(self.w.fridge, image, vision_ai.load_settings(Database.get_instance()))
+        except vision_ai.VisionError as e:
+            self._log(f"Fridge photo not counted: {e}", who)
+            raise ApiError(422, str(e))
+        self._log("Fridge photo saved (count by hand)" if res["manual"] else
+                  f"Fridge photo counted: {len(res['changes'])} items", who)
+        return {"manual": res["manual"], "changes": res["changes"], "note": res["note"], "errors": res["errors"],
+                "provider": vision_ai.PROVIDERS.get(res["provider"], {}).get("title", ""),
+                "text": "" if res["manual"] else changes_text(res["changes"])}
+
+    def fridge_find(self, name):
+        raw = self.w.fridge.find(name)
+        return self.w.fridge.item(raw["id"]) if raw else None
+
+    def _fridge_item(self, item_id):
+        v = self.w.fridge.item(item_id)
+        if v is None:
+            from app.server.web import ApiError
+            raise ApiError(404, "No such item")
+        return v
+
+    def fridge_adjust(self, item_id, delta, who):
+        v = self._fridge_item(item_id)
+        r = self.w.fridge.adjust(item_id, delta)
+        self._log(f"Fridge: {v['name']} {'+' if delta > 0 else '−'}{abs(delta):g}", who)
+        return r
+
+    def fridge_set(self, item_id, count, who):
+        v = self._fridge_item(item_id)
+        r = self.w.fridge.set_count(item_id, count)
+        self._log(f"Fridge: {v['name']} set to {count:g}", who)
+        return r
+
+    def fridge_add(self, name, count, who):
+        from app.server.web import ApiError
+        try:
+            v = self.w.fridge.add_item(name, count)
+        except ValueError as e:
+            raise ApiError(400, str(e))
+        self._log(f"Fridge: tracking {v['name']}", who)
+        return {"id": v["id"], "name": v["name"]}
+
     # -------------------------------------------------------------- money --
 
     def bills(self):
