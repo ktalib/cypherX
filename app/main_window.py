@@ -40,6 +40,9 @@ from app.views.widget_screen import WidgetScreenView
 from app.views.dashboard import DashboardView
 from app.views.smart_home import SmartHomeView
 from app.views.cctv import CctvView
+from app.views.fridge import FridgeView
+from app.services.fridge_service import FridgeStore, summary_text
+from app.services import budget_service
 from app.views.smart_dashboard import SmartDashboardView
 from app.views.bills import BillsView
 from app.views.groceries import GroceriesView
@@ -143,6 +146,9 @@ class MainWindow(QMainWindow):
 
         self.view_smart_home = SmartHomeView(self)
         self.view_cctv = CctvView(self)
+        self.fridge = FridgeStore()
+        budget_service.BOUGHT_HOOKS.append(lambda name, qty: self.fridge.on_bought(name, qty))
+        self.view_fridge = FridgeView(self.fridge, self)
         self.view_smart_dashboard = SmartDashboardView(self.view_smart_home, self.view_cctv, self)
         self.view_dashboard = DashboardView(self)
         self.view_dashboard.navigate_to_module.connect(self.navigate_by_id)
@@ -178,6 +184,7 @@ class MainWindow(QMainWindow):
             "smart_dashboard": self.view_smart_dashboard,
             "smart_home": self.view_smart_home,
             "cctv": self.view_cctv,
+            "fridge": self.view_fridge,
             "dashboard": self.view_dashboard,
             "my_computer": self.view_my_computer,
             "disk_analyzer": self.view_disk_analyzer,
@@ -423,6 +430,10 @@ class MainWindow(QMainWindow):
         self.view_smart_home.model.switch_hook = lambda item, on: self.plugs.request(item, on)
         self.backup_service = self.services.register(
             BackupService(bus, extra_actions=[("Restore from a backup…", self._restore_backup)]))
+        from app.server.fridgecam import FridgeCamService
+        from app.services import vision_ai
+        self.services.register(FridgeCamService(
+            self.fridge, lambda: vision_ai.load_settings(Database.get_instance()), bus))
 
     def _restore_backup(self):
         """Pick a backup, save the current state, restore, restart CYPHER-X."""
@@ -468,6 +479,8 @@ class MainWindow(QMainWindow):
         self._ticks = getattr(self, "_ticks", 0) + 1
         if self._ticks % 200 == 1:                 # every ~10 min
             self._check_meter_low()
+        if self._ticks % 20 == 2:                  # every ~1 min
+            self._check_fridge_low()
 
     def _check_meter_low(self):
         """Once a day, warn when the prepaid meter has less than 2 days left."""
@@ -481,6 +494,31 @@ class MainWindow(QMainWindow):
         msg = f"About {days * 24:.0f} hours of units left ({e.units_left():.1f} kWh). Buy a token soon."
         self.notify("Prepaid meter low", msg)
         bus.publish("meter", "Prepaid meter low", msg)
+
+    def _check_fridge_low(self):
+        """Fridge items that just ran low: a notification, Telegram, and onto the shopping list."""
+        low = self.fridge.newly_low()
+        if not low:
+            return
+        added = self.add_to_shopping([v["name"] for v in low])
+        text = summary_text(low) + (" — added to the shopping list" if added else "")
+        self.notify("Fridge running low", text)
+        bus.publish("fridge", "Fridge running low", text)
+
+    def add_to_shopping(self, names):
+        """Put names on the first shopping list unless they're already waiting there. Returns how many."""
+        svc = self.view_groceries.svc
+        lists = svc.lists()
+        list_id = lists[0]["id"] if lists else svc.add_list("Shopping")
+        waiting = {i["name"].lower() for i in svc.items(list_id) if not i["bought"]}
+        added = 0
+        for name in names:
+            if not any(name.lower() in w for w in waiting):
+                svc.add_item(list_id, name, 1)
+                added += 1
+        if added and self.view_groceries.isVisible():
+            self.view_groceries.refresh()
+        return added
 
     # -------------------------------------------------------------- server --
 

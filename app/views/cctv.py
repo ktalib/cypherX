@@ -46,9 +46,26 @@ THUMB_W, THUMB_H = 64, 48
 EVENT_COOLDOWN_S = 10         # at most one motion event / snapshot per camera per 10 s
 NOTIFY_COOLDOWN_S = 60        # at most one notification per camera per minute
 STREAM_RETRY_MS = 5000
+PHONE_TIMEOUT_S = 8          # a phone camera that sent nothing for this long shows as stopped
 MAX_LISTED_EVENTS = 200
 
 _SUB = "color:#94a3b8;font-size:11px;background:transparent;"
+
+
+# camera apps that turn a phone into a Wi-Fi camera, and their stream address
+PHONE_APPS = {
+    "IP Webcam (Android)": "http://{host}:8080/video",
+    "DroidCam (Android / iPhone)": "http://{host}:4747/video",
+}
+
+
+def phone_host(text):
+    """'192.168.1.23', 'http://192.168.1.23:8080/' → '192.168.1.23' (empty if it doesn't look like one)."""
+    t = (text or "").strip()
+    if "://" in t:
+        t = t.split("://", 1)[1]
+    t = t.split("/", 1)[0].rsplit("@", 1)[-1].split(":", 1)[0]
+    return t if t and all(c.isalnum() or c in ".-" for c in t) else ""
 
 
 def _mask_url(url):
@@ -82,8 +99,8 @@ def gray_thumb(img):
 
 
 class CameraFeed(QObject):
-    """One camera: capture (device) or playback (stream URL) into a video sink,
-    with motion sampling and recording."""
+    """One camera: capture (device), playback (stream URL) or pictures pushed by a
+    phone browser ("phone"), with motion sampling and recording."""
 
     frame_ready = Signal()
     motion = Signal(float)
@@ -105,6 +122,10 @@ class CameraFeed(QObject):
         self._retry = QTimer(self)
         self._retry.setSingleShot(True)
         self._retry.timeout.connect(self._play_stream)
+        self._last_push = 0.0
+        self.held = False             # phone camera switched off on the PC: ignore its pictures
+        self._push_watch = QTimer(self)
+        self._push_watch.timeout.connect(self._check_push)
 
     @property
     def can_record(self):
@@ -117,7 +138,11 @@ class CameraFeed(QObject):
             return
         self.running = True
         self.detector.reset()
-        if self.cam["source"] == "url":
+        if self.cam["source"] == "phone":
+            self._last_push = 0.0
+            self._push_watch.start(2000)
+            self._set_status("Waiting for the phone…")
+        elif self.cam["source"] == "url":
             self._player = QMediaPlayer(self)
             self._player.setVideoSink(self.sink)
             self._player.errorOccurred.connect(self._on_stream_error)
@@ -143,6 +168,7 @@ class CameraFeed(QObject):
 
     def stop(self):
         self._retry.stop()
+        self._push_watch.stop()
         self.stop_recording()
         if self._camera is not None:
             self._camera.stop()
@@ -221,12 +247,35 @@ class CameraFeed(QObject):
             self.recording = False
             self.state_changed.emit()
 
+    def push_jpeg(self, data):
+        """A picture from a phone browser: "ok", "off" (switched off on the PC) or "bad"."""
+        if self.held:
+            return "off"
+        img = QImage.fromData(data, "JPG")
+        if img.isNull():
+            return "bad"
+        if not self.running:
+            self.start()
+        self._last_push = time.monotonic()
+        if self.status != "Live":
+            self._set_status("Live")
+        self._handle_image(img)
+        return "ok"
+
+    def _check_push(self):
+        if self.running and self._last_push and time.monotonic() - self._last_push > PHONE_TIMEOUT_S \
+                and self.status == "Live":
+            self._set_status("Phone stopped sending")
+
     def _on_frame(self, frame):
         if not self.running or not frame.isValid():
             return
         img = frame.toImage()
         if img.isNull():
             return
+        self._handle_image(img)
+
+    def _handle_image(self, img):
         self.image = img
         self.frame_ready.emit()
         now = time.monotonic()
@@ -357,6 +406,8 @@ class CameraTile(QFrame):
         bits = [feed.status]
         if cam["source"] == "url":
             bits.append(_mask_url(cam["url"]))
+        elif cam["source"] == "phone":
+            bits.append("phone")
         if not cam.get("motion", True):
             bits.append("motion off")
         self.status.setText("  ·  ".join(bits))
@@ -570,6 +621,7 @@ class CctvView(QWidget):
                 self.start_camera(feed, log=False)
 
     def start_camera(self, feed, log=True):
+        feed.held = False
         feed.start()
         if log and feed.running:
             self._log(f"{feed.cam['name']} started")
@@ -580,6 +632,7 @@ class CctvView(QWidget):
         if timer:
             timer.stop()
         feed.stop()
+        feed.held = feed.cam["source"] == "phone"
         self._log(f"{feed.cam['name']} stopped")
         self._sync_bar()
 
@@ -614,6 +667,9 @@ class CctvView(QWidget):
             act.setEnabled(False)
         m.addSeparator()
         m.addAction(hicon("wifi", "#e2e8f0", 14), "Network camera (RTSP / HTTP URL)…", self._add_url)
+        m.addAction(hicon("camera", "#e2e8f0", 14), "Phone camera app (IP Webcam, DroidCam)…",
+                    self._add_phone_app)
+        m.addAction(hicon("link", "#e2e8f0", 14), "Phone browser (no app)…", self._phone_browser_help)
         m.exec(QCursor.pos())
 
     def _add_device(self, name, key):
@@ -638,6 +694,56 @@ class CctvView(QWidget):
         cam = self.store.add_camera(name.strip(), url=url)
         self._log(f"Network camera added: {name.strip()} ({_mask_url(url)})")
         self.start_camera(self._add_feed(cam))
+
+    def _add_phone_app(self):
+        apps = list(PHONE_APPS)
+        app, ok = QInputDialog.getItem(self, "Phone camera", "Camera app running on the phone:", apps, 0, False)
+        if not ok:
+            return
+        ip, ok = QInputDialog.getText(
+            self, "Phone camera",
+            f"The phone's address, shown in {app.split(' (')[0]} after you start it\n"
+            "(e.g. 192.168.1.23). Tip: reserve this address for the phone in your router.")
+        ip = phone_host(ip)
+        if not ok or not ip:
+            return
+        name, ok = QInputDialog.getText(self, "Phone camera", "Name (e.g. Gate, Sitting room):", text="Phone camera")
+        if not ok or not name.strip():
+            return
+        url = PHONE_APPS[app].format(host=ip)
+        cam = self.store.add_camera(name.strip(), url=url)
+        self._log(f"Phone camera added: {name.strip()} ({url})")
+        self.start_camera(self._add_feed(cam))
+
+    def _phone_browser_help(self):
+        win = self.window()
+        svc = win.services.get("web") if hasattr(win, "services") else None
+        port = svc.app.https_port if svc is not None else 0
+        if port:
+            from app.server.web import lan_addresses
+            where = "\n".join(f"   https://{ip}:{port}" for ip in lan_addresses()) or f"   https://<this PC's IP>:{port}"
+            text = ("On the phone (same Wi-Fi), open:\n\n" + where + "\n\n"
+                    "Accept the one-time \"not private\" warning (the certificate is made by this PC), sign in, "
+                    "then Security → Use this phone as a camera.\n\n"
+                    "The phone shows up here as a camera by itself, with motion detection and alerts. "
+                    "Keep the page open and the phone plugged in.")
+        else:
+            text = ("Turn on the Web dashboard first (Server → Services), with a Secure port set (8443 by default).\n\n"
+                    "Then open https://<this PC's IP>:8443 on the phone, sign in, and go to "
+                    "Security → Use this phone as a camera.")
+        QMessageBox.information(self, "Phone as a camera", text)
+
+    def phone_camera(self, name):
+        """Find or add the phone-browser camera called name (used by the web dashboard)."""
+        feed = next((f for f in self.feeds.values()
+                     if f.cam["source"] == "phone" and f.cam["name"].lower() == name.lower()), None)
+        if feed is None:
+            cam = self.store.add_camera(name, source="phone")
+            self._log(f"Phone camera added: {name}")
+            feed = self._add_feed(cam)
+        if not feed.running:
+            self.start_camera(feed)
+        return feed
 
     def camera_menu(self, feed):
         cam = feed.cam

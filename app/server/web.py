@@ -2,6 +2,10 @@
 Web dashboard: a small HTTP server so phones on the home Wi-Fi can use the
 smart home — http://<server-ip>:8080.
 
+  • also on https://<server-ip>:8443 with a self-made certificate (app/server/tls.py):
+    phone browsers only allow the camera on secure pages, and that is how a phone
+    becomes a CCTV camera (it posts JPEG frames to /api/phonecam/<id>/frame)
+
   • same accounts as the app (session cookie, 12 h), login rate-limited per address
   • JSON API backed by an `api` object (see app/server/home_api.py) that does the
     real work on the GUI thread
@@ -14,6 +18,8 @@ import json
 import os
 import secrets
 import socket
+import ssl
+import threading
 import time
 from http import HTTPStatus
 from http.cookies import SimpleCookie
@@ -33,6 +39,8 @@ STATIC_FILES = {
 }
 COOKIE = "cx_session"
 MAX_BODY = 64 * 1024
+MAX_FRAME = 2 * 1024 * 1024     # one JPEG from a phone camera
+MAX_CAM_NAME = 40
 LOGIN_TRIES, LOGIN_LOCK_S = 5, 60
 
 
@@ -119,6 +127,7 @@ class WebApp:
         self.sessions = Sessions()
         self.limiter = LoginLimiter()
         self.requests = 0
+        self.https_port = 0           # set by WebService while the secure port is open
 
     def handle(self, method, path, query, body, token, ip):
         """Returns (status, content_type, payload_bytes, set_cookie or None)."""
@@ -185,6 +194,21 @@ class WebApp:
             if parts == ["server"]:
                 _need_root(user)
                 return api.server()
+            if parts == ["phonecam"]:
+                return {"https_port": self.https_port}
+            if parts == ["fridge"]:
+                return api.fridge()
+            if parts == ["fridge", "photo.jpg"]:
+                data = api.fridge_photo_jpeg()
+                if not data:
+                    raise ApiError(404, "No fridge photo yet")
+                return ("image/jpeg", data)
+        if method == "POST" and is_image_upload(method, path):
+            if not body:
+                raise ApiError(400, "No picture")
+            if parts[0] == "fridge":
+                return api.fridge_check(body, user["username"])
+            return api.phonecam_frame(parts[1], body)
         if method == "POST":
             data = _json(body)
             who = user["username"]
@@ -200,6 +224,20 @@ class WebApp:
                 return api.add_token(_number(data, "amount", 0, 10_000_000), _number(data, "units", 0.1, 100000), who)
             if len(parts) == 3 and parts[0] == "groceries" and parts[2] == "toggle":
                 return api.toggle_grocery(int(parts[1]), who)
+            if parts == ["phonecam", "start"]:
+                name = " ".join(str(data.get("name") or "").split())[:MAX_CAM_NAME] or "Phone camera"
+                return api.phonecam_start(name, who)
+            if len(parts) == 3 and parts[0] == "phonecam" and parts[2] == "stop":
+                return api.phonecam_stop(parts[1], who)
+            if parts == ["fridge", "add"]:
+                name = " ".join(str(data.get("name") or "").split())[:40]
+                if not name:
+                    raise ApiError(400, "Give the item a name")
+                return api.fridge_add(name, int(_number(data, "count", 0, 999)) if "count" in data else 0, who)
+            if len(parts) == 3 and parts[0] == "fridge" and parts[2] == "adjust":
+                return api.fridge_adjust(parts[1], int(_number(data, "delta", -100, 100)), who)
+            if len(parts) == 3 and parts[0] == "fridge" and parts[2] == "set":
+                return api.fridge_set(parts[1], int(_number(data, "count", 0, 999)), who)
         raise ApiError(404, "Not found")
 
 
@@ -230,20 +268,42 @@ def _number(data, key, lo, hi):
     return v
 
 
+class _Server(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        pass                          # dropped connections / refused certificates are normal here
+
+
+def is_image_upload(method, path):
+    """Routes that take a raw JPEG body: phone camera frames and fridge photos."""
+    if method != "POST":
+        return False
+    return (path.startswith("/api/phonecam/") and path.endswith("/frame")) or path == "/api/fridge/photo"
+
+
 def make_handler(app):
     class Handler(BaseHTTPRequestHandler):
         server_version = "CYPHER-X"
         sys_version = ""
+        timeout = 30                  # a phone that walks out of Wi-Fi range doesn't hold a thread
 
         def _serve(self, method):
             url = urlparse(self.path)
-            length = int(self.headers.get("Content-Length") or 0)
-            if length > MAX_BODY:
+            frame = is_image_upload(method, url.path)
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = -1
+            if length < 0 or length > (MAX_FRAME if frame else MAX_BODY):
                 self.send_error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
                 return
             body = self.rfile.read(length) if length else b""
-            if method == "POST" and body and "application/json" not in (self.headers.get("Content-Type") or ""):
-                status, ctype, payload, cookie = 415, "application/json", b'{"error":"Use JSON"}', None
+            ctype_in = self.headers.get("Content-Type") or ""
+            want = "image/jpeg" if frame else "application/json"
+            if method == "POST" and body and want not in ctype_in:
+                status, ctype, payload, cookie = 415, "application/json", \
+                    json.dumps({"error": f"Send {want}"}).encode(), None
             else:
                 token = None
                 if self.headers.get("Cookie"):
@@ -281,13 +341,16 @@ class WebService(ThreadService):
     description = "Use the smart home from any phone or laptop on your Wi-Fi, with your CYPHER-X account."
     icon = "network_monitor"
     default_enabled = False
-    settings_schema = [("port", "Port", "int", 8080, "Open http://<this PC's IP>:<port> on your phone")]
+    settings_schema = [("port", "Port", "int", 8080, "Open http://<this PC's IP>:<port> on your phone"),
+                       ("https_port", "Secure port", "int", 8443,
+                        "https://<this PC's IP>:<port> — needed to use a phone as a camera (0 = off)")]
 
     def __init__(self, auth, api):
         super().__init__()
         self.auth = auth
         self.app = WebApp(auth, api, log=self.log)
         self._httpd = None
+        self._httpsd = None
 
     def can_start(self):
         if self.auth.uses_default_password():
@@ -298,15 +361,45 @@ class WebService(ThreadService):
     def run(self, stop):
         port = int(self.setting("port") or 8080)
         try:
-            self._httpd = ThreadingHTTPServer(("0.0.0.0", port), make_handler(self.app))
+            self._httpd = _Server(("0.0.0.0", port), make_handler(self.app))
         except OSError as e:
             raise RuntimeError(f"Port {port} is busy or blocked ({e.strerror or e})")
         self._httpd.daemon_threads = True
         self.mark_running()
         urls = ", ".join(f"http://{ip}:{port}" for ip in lan_addresses()) or f"http://localhost:{port}"
         self.log(f"Serving on {urls}")
-        self._httpd.serve_forever(poll_interval=0.5)
-        self._httpd.server_close()
+        self._start_https()
+        try:
+            self._httpd.serve_forever(poll_interval=0.5)
+        finally:
+            self._httpd.server_close()
+            self._stop_https()
+
+    def _start_https(self):
+        port = int(self.setting("https_port") or 0)
+        if not port:
+            return
+        try:
+            from app.server.tls import ensure_certificate, server_context
+            ctx = server_context(*ensure_certificate(lan_addresses()))
+            httpsd = _Server(("0.0.0.0", port), make_handler(self.app))
+            # the handshake runs in the request thread, so a stalled client can't block accept()
+            httpsd.socket = ctx.wrap_socket(httpsd.socket, server_side=True, do_handshake_on_connect=False)
+        except (OSError, RuntimeError, ssl.SSLError) as e:
+            self.log(f"Secure port {port} not opened — the phone camera won't work ({e})", "warn")
+            return
+        self._httpsd = httpsd
+        self.app.https_port = port
+        threading.Thread(target=httpsd.serve_forever, kwargs={"poll_interval": 0.5},
+                         name="web-https", daemon=True).start()
+        self.log("Secure (phone camera) on " + ", ".join(f"https://{ip}:{port}" for ip in lan_addresses()))
+
+    def _stop_https(self):
+        httpsd, self._httpsd = self._httpsd, None
+        self.app.https_port = 0
+        if httpsd is not None:
+            httpsd.shutdown()
+            httpsd.server_close()
 
     def on_stop(self):
         if self._httpd is not None:
@@ -319,6 +412,10 @@ class WebService(ThreadService):
 
     def info(self):
         lines = ["Open on your phone: " + "  ·  ".join(self.urls())]
+        if self.app.https_port:
+            lines.append("Phone as a camera: " + "  ·  ".join(
+                f"https://{ip}:{self.app.https_port}" for ip in lan_addresses())
+                + "  (accept the one-time certificate warning)")
         lines.append(f"{self.app.sessions.count()} signed-in session(s) · {self.app.requests} requests served")
         if self.auth.uses_default_password():
             lines.append("Blocked until the admin password is changed.")

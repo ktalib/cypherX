@@ -16,6 +16,7 @@ Commands: /status /devices /on <name> /off <name> /alloff /units /arm /disarm
 Uses the Telegram Bot API over HTTPS with the standard library (urllib).
 """
 import json
+import re
 import queue
 import random
 import threading
@@ -29,7 +30,7 @@ from app.server.services import ThreadService
 API = "https://api.telegram.org/bot{token}/{method}"
 POLL_TIMEOUT = 20
 PAIR_TTL = 600
-ALERT_KINDS = {"motion": "alert_motion", "power": "alert_power", "meter": "alert_meter",
+ALERT_KINDS = {"motion": "alert_motion", "power": "alert_power", "meter": "alert_meter", "fridge": "alert_fridge",
                "service": "alert_system", "network": "alert_system", "backup": "alert_system",
                "smart": "alert_system"}
 
@@ -38,6 +39,14 @@ class TelegramError(Exception):
     def __init__(self, message, fatal=False):
         super().__init__(message)
         self.fatal = fatal          # e.g. a bad token: retrying won't help until it's fixed
+
+
+def _http_raw(url, timeout=60):
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return r.read()
+    except (urllib.error.URLError, OSError) as e:
+        raise TelegramError(f"download failed: {getattr(e, 'reason', e)}")
 
 
 def _http(url, data=None, headers=None, timeout=30):
@@ -57,9 +66,10 @@ def _http(url, data=None, headers=None, timeout=30):
 
 
 class TelegramClient:
-    def __init__(self, token, http=_http):
+    def __init__(self, token, http=_http, raw=_http_raw):
         self.token = token
         self.http = http
+        self.raw = raw
 
     def call(self, method, params=None, timeout=30):
         url = API.format(token=self.token, method=method)
@@ -78,6 +88,13 @@ class TelegramClient:
 
     def send_message(self, chat_id, text):
         return self.call("sendMessage", {"chat_id": chat_id, "text": text[:4000]})
+
+    def download(self, file_id):
+        """A photo someone sent the bot, as bytes."""
+        path = self.call("getFile", {"file_id": file_id}).get("file_path")
+        if not path:
+            raise TelegramError("Telegram didn't give the file")
+        return self.raw(f"https://api.telegram.org/file/bot{self.token}/{path}")
 
     def send_photo(self, chat_id, jpeg, caption=""):
         boundary = uuid.uuid4().hex
@@ -101,7 +118,10 @@ HELP = ("CYPHER-X home bot\n"
         "/alloff – everything off except the fridge\n"
         "/units – prepaid meter units and days left\n"
         "/arm, /disarm – CCTV alerts\n"
-        "/snapshot – latest camera picture")
+        "/snapshot – latest camera picture\n"
+        "/fridge – what's in the fridge\n"
+        "/took 2 eggs, /add 6 beer – update the fridge\n"
+        "📷 Send a photo of the open fridge and I'll count what's inside")
 
 
 def _h(hours):
@@ -186,7 +206,45 @@ class BotBrain:
                 return "text", "No camera picture yet."
             caption = api.snapshot_caption() if hasattr(api, "snapshot_caption") else ""
             return "photo", (jpeg, caption or "Camera")
+        if cmd == "/fridge":
+            f = api.fridge()
+            if not f["items"]:
+                return "text", "Nothing tracked in the fridge yet. Send me a photo of it."
+            lines = []
+            for v in f["items"]:
+                est = v["estimate"]
+                n = f"≈{est:.0f}" if v["rate"] and abs(est - v["count"]) >= 0.5 else f"{v['count']}"
+                when = f" · runs out in {_h(v['days_left'] * 24)}" if v["days_left"] is not None else ""
+                lines.append(f"{'⚠️' if v['low'] else '•'} {v['name']}: {n}{when}")
+            if f["last"]:
+                lines.append(f"\nLast photo check {_h((time.time() - f['last']['ts']) / 3600)} ago")
+            return "text", "\n".join(lines)
+        if cmd in ("/took", "/add"):
+            nums = re.findall(r"\b\d+\b", arg)
+            n = int(nums[0]) if nums else 1
+            name = " ".join(re.sub(r"\b\d+\b", " ", arg).split())
+            if not name:
+                return "text", f"What? e.g. {cmd} 2 eggs"
+            v = api.fridge_find(name)
+            if v is None:
+                if cmd == "/took":
+                    return "text", f"'{name}' isn't in the fridge list. Try /fridge"
+                v = api.fridge_add(name.capitalize(), n, who)
+                return "text", f"Now tracking {v['name']}: {n}."
+            r = api.fridge_adjust(v["id"], -n if cmd == "/took" else n, who)
+            return "text", f"{r['name']}: {r['after']} left." if cmd == "/took" else f"{r['name']}: {r['after']} now."
         return "text", "Unknown command.\n\n" + HELP
+
+    def photo(self, jpeg, who="telegram"):
+        """A photo sent to the bot: count the fridge."""
+        try:
+            res = self.api.fridge_check(jpeg, who)
+        except Exception as e:
+            return "text", f"Couldn't count that photo: {e}"
+        if res["manual"]:
+            return "text", "Photo saved. No AI is set up to count it — open CYPHER-X → Fridge → AI settings."
+        extra = f"\n\nNote: {res['note']}" if res["note"] else ""
+        return "text", f"🧊 Fridge ({res['provider']}):\n{res['text']}{extra}"
 
     @staticmethod
     def status_text(s):
@@ -223,6 +281,7 @@ class TelegramService(ThreadService):
         ("alert_motion", "Motion alerts (when armed)", "bool", True, ""),
         ("alert_power", "Power cut / back", "bool", True, ""),
         ("alert_meter", "Meter running low", "bool", True, ""),
+        ("alert_fridge", "Fridge running low", "bool", True, ""),
         ("alert_system", "Server alerts", "bool", True, "Service restarts, new devices, backups"),
     ]
 
@@ -320,8 +379,12 @@ class TelegramService(ThreadService):
     def _handle_update(self, u):
         msg = u.get("message") or {}
         chat = msg.get("chat") or {}
-        chat_id, text = chat.get("id"), (msg.get("text") or "").strip()
-        if chat_id is None or not text:
+        chat_id, text = chat.get("id"), (msg.get("text") or msg.get("caption") or "").strip()
+        photo = msg.get("photo") or []
+        doc = msg.get("document") or {}
+        file_id = photo[-1].get("file_id") if photo else (
+            doc.get("file_id") if str(doc.get("mime_type", "")).startswith("image/") else None)
+        if chat_id is None or not (text or file_id):
             return
         name = chat.get("first_name") or chat.get("title") or chat.get("username") or str(chat_id)
         paired = any(c.get("id") == chat_id for c in self.chats())
@@ -338,6 +401,12 @@ class TelegramService(ThreadService):
                 self.log(f"Ignored a message from unpaired chat {name}", "warn")
                 self.client.send_message(chat_id, "This bot is private. Pair it from CYPHER-X: "
                                                   "Server → Services → Telegram bot → Pair a chat.")
+            return
+        if file_id:
+            self.client.send_message(chat_id, "Counting what's in the photo… 🔎")
+            kind, payload = self.brain.photo(self.client.download(file_id), who=f"Telegram: {name}")
+            self.client.send_message(chat_id, payload)
+            self.log(f"{name}: fridge photo")
             return
         kind, payload = self.brain.handle(text, who=f"Telegram: {name}")
         if kind == "photo":

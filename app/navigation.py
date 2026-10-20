@@ -16,6 +16,7 @@ MODULES = {
     "smart_dashboard": ("Home Dashboard", "activity", "Smart home at a glance"),
     "smart_home": ("Smart Home", "home", "3D home & power system"),
     "cctv": ("CCTV", "video", "Security cameras & motion alerts"),
+    "fridge": ("Fridge", "fridge", "What's in the fridge, counted from photos"),
     "widget_screen": ("Widget Screen", "widgets", "Live liquid glass desktop & lock widgets"),
     "smart_devices": ("Smart Devices", "plug", "Smart plugs, sockets, bulbs & switches found on the Wi-Fi"),
     "notes_tasks": ("Notes & Tasks", "notes", "Notes and to-dos"),
@@ -45,7 +46,7 @@ MODULES = {
 # Home network sidebar: collapsible groups (group_id, title, icon, collapsed_by_default, module_ids)
 NAV_GROUPS = [
     ("smart_home", "Smart Home", "home", False,
-     ["smart_dashboard", "smart_home", "smart_devices", "cctv", "widget_screen"]),
+     ["smart_dashboard", "smart_home", "smart_devices", "cctv", "fridge", "widget_screen"]),
     ("apps", "Apps", "widgets", False,
      ["notes_tasks", "bills", "groceries", "clock_calendar", "app_launcher"]),
 ]

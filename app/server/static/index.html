@@ -170,6 +170,32 @@
   .cam img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cam .badge { position: absolute; left: 10px; top: 10px; background: rgba(0,0,0,.55); color: #fff; font-size: 11px;
     font-weight: 700; padding: 4px 9px; border-radius: 999px; backdrop-filter: blur(6px); }
+  .cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cam .badge.alert { background: var(--bad); }
+  .pcam-head { display: flex; gap: 14px; align-items: center; }
+  .pcam-head .ico { width: 54px; height: 54px; flex: none; border-radius: 18px; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+  .pcam-body { display: grid; gap: 10px; margin-top: 14px; }
+  .pcam-row { display: flex; gap: 8px; align-items: center; }
+  .pcam-row .grow { flex: 1; min-width: 0; font-size: 12px; }
+  .note { font-size: 13px; line-height: 1.45; color: var(--muted); background: var(--surface2); border-radius: 14px; padding: 12px 14px; }
+  a.btn { display: block; text-align: center; text-decoration: none; }
+  label.btn { display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+  .btn.busy { opacity: .6; pointer-events: none; }
+  #frResult { white-space: pre-line; }
+  .qty { flex: none; width: 38px; height: 38px; border-radius: 12px; background: var(--surface2); font-size: 20px;
+    font-weight: 700; display: grid; place-items: center; line-height: 1; }
+  .qty:active { transform: scale(.92); }
+  .fr-row .num { min-width: 46px; text-align: center; font-size: 20px; font-weight: 600; white-space: nowrap; }
+  .fr-row.low .num, .fr-row.low .grow b { color: var(--bad); }
+  .fr-add { display: flex; gap: 8px; padding: 10px; }
+  .fr-add #frName { flex: 1; min-width: 0; }
+  .fr-add #frCount { width: 78px; flex: none; }
+  .fr-add .btn { width: auto; padding: 12px 18px; flex: none; }
+  .pc-pill { position: fixed; z-index: 31; right: 14px; bottom: calc(var(--tab-h) + var(--safe-b) + 12px); display: inline-flex; gap: 6px;
+    align-items: center; padding: 8px 12px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 12px; font-weight: 700;
+    box-shadow: 0 6px 20px rgba(0,0,0,.35); border: none; }
+  .pc-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: pulse 1.4s infinite; }
   .cam .empty { position: absolute; inset: 0; display: grid; place-items: center; color: #64748b; font-size: 13px; }
 
   /* ---------- bottom tabs / side rail ---------- */
@@ -265,6 +291,8 @@
   <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+  <symbol id="i-flip" viewBox="0 0 24 24"><path d="M20 7h-3l-2-3H9L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M9 13a3 3 0 0 1 5.2-2M15 13a3 3 0 0 1-5.2 2"/><path d="M14 9v2h-2M10 17v-2h2"/></symbol>
   <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M2 2l20 20"/><path d="M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5.2-2.8M19 13a10 10 0 0 0-2.2-1.6M12 20h.01"/></symbol>
 </svg>
 
@@ -356,6 +384,30 @@
               <button class="chip" id="camRefresh"><svg class="ic sm"><use href="#i-refresh"/></svg>Refresh</button>
             </div>
           </div>
+          <div class="card" id="pcCard">
+            <div class="pcam-head">
+              <div class="ico"><svg class="ic lg"><use href="#i-phone"/></svg></div>
+              <div style="flex:1"><b style="font-size:16px">Use this phone as a camera</b><br>
+                <span class="muted" style="font-size:13px">Point it at the door or gate — motion alerts work like any CCTV camera</span></div>
+            </div>
+            <div class="pcam-body" id="pcIdle">
+              <input id="pcName" maxlength="40" placeholder="Camera name, e.g. Gate" aria-label="Camera name">
+              <button class="btn" id="pcStart" type="button">Start camera</button>
+              <div class="hidden" id="pcInsecure" style="display:grid;gap:10px">
+                <div class="note" id="pcInsecureMsg">Phones only allow the camera on the secure page.</div>
+                <a class="btn hidden" id="pcSecureLink" href="#">Open the secure page</a>
+              </div>
+            </div>
+            <div class="pcam-body hidden" id="pcLive">
+              <div class="cam"><video id="pcVideo" playsinline muted autoplay></video><span class="badge" id="pcBadge">● LIVE</span></div>
+              <div class="pcam-row">
+                <span class="grow muted" id="pcInfo">Starting…</span>
+                <button class="chip" id="pcFlip" type="button"><svg class="ic sm"><use href="#i-flip"/></svg>Flip</button>
+                <button class="chip bad" id="pcStop" type="button"><svg class="ic sm"><use href="#i-power"/></svg>Stop</button>
+              </div>
+              <div class="note">Keep this page open and the phone plugged in. The screen can dim, but don't lock it.</div>
+            </div>
+          </div>
         </div>
         <div style="display:grid;gap:12px">
           <div class="section-title">Cameras</div>
@@ -365,6 +417,38 @@
     </section>
 
     <!-- MONEY -->
+    <!-- FRIDGE -->
+    <section class="view hidden" id="v-fridge">
+      <div class="card">
+        <div class="pcam-head">
+          <div class="ico"><svg class="ic lg"><use href="#i-fridge"/></svg></div>
+          <div style="flex:1"><b style="font-size:16px">What's in the fridge</b><br>
+            <span class="muted" style="font-size:13px" id="frAi"></span></div>
+        </div>
+        <label class="btn" id="frPhotoBtn" style="margin-top:14px"><svg class="ic sm"><use href="#i-camera"/></svg>Check with a photo
+          <input type="file" id="frFile" accept="image/*" capture="environment" hidden></label>
+        <div class="note hidden" id="frResult" style="margin-top:10px" role="status"></div>
+      </div>
+      <div class="desk2">
+        <div style="display:grid;gap:12px;align-content:start">
+          <div class="section-title">In the fridge <span id="frSum" style="color:var(--bad)"></span></div>
+          <div class="card list" id="frList"></div>
+          <form class="card fr-add" id="frAdd">
+            <input id="frName" maxlength="40" placeholder="Track another item, e.g. Malt" aria-label="Item name">
+            <input id="frCount" type="number" inputmode="numeric" min="0" max="999" placeholder="0" aria-label="How many">
+            <button class="btn" type="submit">Add</button>
+          </form>
+        </div>
+        <div style="display:grid;gap:12px;align-content:start">
+          <div class="section-title">Last photo</div>
+          <div class="card" style="padding:10px">
+            <div class="cam"><img id="frImg" alt="Last fridge photo"><div class="empty" id="frEmpty">No photo yet</div></div>
+            <div class="muted" style="font-size:12px;padding:10px 6px 2px" id="frWhen"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="view hidden" id="v-money">
       <div class="grid2">
         <div class="card stat"><small>Bills / month</small><b id="billsMonth">—</b><span id="billsSub"></span></div>
@@ -404,6 +488,7 @@
     <button data-tab="home" class="active"><svg class="ic"><use href="#i-home"/></svg>Home</button>
     <button data-tab="devices"><svg class="ic"><use href="#i-plug"/></svg>Devices</button>
     <button data-tab="security"><svg class="ic"><use href="#i-shield"/></svg>Security</button>
+    <button data-tab="fridge"><svg class="ic"><use href="#i-fridge"/></svg>Fridge</button>
     <button data-tab="money"><svg class="ic"><use href="#i-wallet"/></svg>Money</button>
     <button data-tab="server" id="tabServer" class="hidden"><svg class="ic"><use href="#i-server"/></svg>Server</button>
   </nav>
@@ -429,6 +514,7 @@
 </div>
 <div class="banner hidden" id="offline"><svg class="ic sm"><use href="#i-wifi-off"/></svg><span>Can't reach CYPHER-X — retrying…</span></div>
 <div class="toast" id="toast" role="status"></div>
+<button class="pc-pill hidden" id="pcPill" data-go="security">Phone camera on</button>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -464,6 +550,7 @@ const quiet = (e) => { if (!["signed out", "offline"].includes(e.message)) toast
 /* ---------------- auth ---------------- */
 function showLogin() {
   clearInterval(timer); me = null;
+  if (pc.run) pcStop(false);
   $("app").classList.add("hidden"); $("login").classList.remove("hidden");
   setTimeout(() => $("u").focus(), 50);
 }
@@ -482,7 +569,7 @@ $("loginForm").addEventListener("submit", async (e) => {
   catch (err) { $("loginErr").textContent = err.message === "offline" ? "Can't reach CYPHER-X" : err.message; }
 });
 $("showPw").onclick = () => { const p = $("p"); p.type = p.type === "password" ? "text" : "password"; };
-$("logout").onclick = async () => { await fetch("/api/logout").catch(() => {}); showLogin(); };
+$("logout").onclick = async () => { if (pc.run) pcStop(true); await fetch("/api/logout").catch(() => {}); showLogin(); };
 document.addEventListener("visibilitychange", () => { if (!document.hidden && me) refresh(); });
 
 /* ---------------- navigation ---------------- */
@@ -492,6 +579,7 @@ function go(name, initial) {
   tab = name;
   document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll("main .view").forEach(v => v.classList.toggle("hidden", v.id !== "v-" + name));
+  pcPill();
   if (!initial) { history.replaceState(null, "", "#" + name); window.scrollTo({top: 0}); }
   refresh();
 }
@@ -506,7 +594,8 @@ async function refresh(manual) {
     const s = await api("status"); lastStatus = s; renderChrome(s);
     if (tab === "home") renderHome(s);
     if (tab === "devices") renderDevices(s);
-    if (tab === "security") { renderSecurity(s); if (manual || !$("camImg").src) loadCam(); }
+    if (tab === "security") { renderSecurity(s); pcCheck(); if (manual || !$("camImg").src) loadCam(); }
+    if (tab === "fridge") renderFridge(await api("fridge"));
     if (tab === "money") renderMoney(await api("bills"), await api("groceries"));
     if (tab === "server") renderServer(await api("server"));
   } catch (e) { quiet(e); }
@@ -590,7 +679,7 @@ function renderSecurity(s) {
   $("armCard").classList.toggle("armed", sec.armed); $("armSwitch").classList.toggle("on", sec.armed);
   $("armTitle").textContent = sec.armed ? "Armed" : "Disarmed";
   $("armSub").textContent = (sec.armed ? "You'll get motion alerts" : "Tap to get motion alerts") + " · " + sec.motion_today + " motion today";
-  $("camList").innerHTML = sec.cameras.length ? sec.cameras.map(c => `<div class="li"><span class="ico">${icon("camera", "sm")}</span>
+  $("camList").innerHTML = sec.cameras.length ? sec.cameras.map(c => `<div class="li"><span class="ico">${icon(c.source === "phone" ? "phone" : "camera", "sm")}</span>
       <div class="grow"><b>${esc(c.name)}</b><small>${c.live ? "Live" : "Off"}</small></div>
       <span class="pill ${c.live ? "good" : "dim"}">${c.live ? "LIVE" : "OFF"}</span></div>`).join("")
     : `<div class="li"><div class="grow"><b>No cameras yet</b><small>Add one in CYPHER-X → CCTV</small></div></div>`;
@@ -610,6 +699,175 @@ function loadCam() {
 }
 $("camRefresh").onclick = () => { tap(); loadCam(); };
 $("camBox").onclick = () => loadCam();
+
+/* ---------------- this phone as a camera ---------------- */
+// Phone browsers only give pages the camera on https://, so on the plain address
+// this card links to the secure port instead.
+const PC_EVERY_MS = 400;                       // ~2.5 pictures a second: plenty for motion detection
+const pc = { stream: null, cam: null, facing: "environment", run: false, sent: 0, t0: 0, lock: null,
+             canvas: document.createElement("canvas"), checked: false };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+try { $("pcName").value = localStorage.getItem("cx_pcname") || "Phone camera"; } catch (e) { $("pcName").value = "Phone camera"; }
+function pcPill() { $("pcPill").classList.toggle("hidden", !(pc.run && tab !== "security")); }
+
+async function pcCheck() {
+  if (pc.checked) return; pc.checked = true;
+  const can = window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+  if (can) return;
+  $("pcStart").classList.add("hidden"); $("pcName").classList.add("hidden"); $("pcInsecure").classList.remove("hidden");
+  if (window.isSecureContext) { $("pcInsecureMsg").textContent = "This browser can't share its camera. Try Chrome or Safari."; return; }
+  try {
+    const r = await api("phonecam");
+    if (r.https_port) {
+      $("pcSecureLink").href = `https://${location.hostname}:${r.https_port}/#security`;
+      $("pcSecureLink").classList.remove("hidden");
+      $("pcInsecureMsg").textContent = "Phones only allow the camera on the secure page. Open it, accept the one-time " +
+        "“not private” warning (CYPHER-X made its own certificate), and sign in there.";
+    } else {
+      $("pcInsecureMsg").textContent = "Phones only allow the camera on a secure page. Turn on the Secure port in " +
+        "CYPHER-X → Server → Services → Web dashboard.";
+    }
+  } catch (e) { pc.checked = false; }
+}
+
+async function pcOpen() {
+  pcCloseTracks();
+  pc.stream = await navigator.mediaDevices.getUserMedia({audio: false,
+    video: {facingMode: {ideal: pc.facing}, width: {ideal: 1280}, height: {ideal: 720}}});
+  pc.stream.getVideoTracks().forEach(t => t.onended = () => { if (pc.run) pcOpen().catch(() => {}); });
+  const v = $("pcVideo"); v.srcObject = pc.stream; await v.play().catch(() => {});
+}
+function pcCloseTracks() { if (pc.stream) pc.stream.getTracks().forEach(t => { t.onended = null; t.stop(); }); pc.stream = null; }
+async function pcWake() { try { if (pc.run && navigator.wakeLock) pc.lock = await navigator.wakeLock.request("screen"); } catch (e) {} }
+
+$("pcStart").onclick = async () => {
+  tap();
+  const name = $("pcName").value.trim() || "Phone camera";
+  try { localStorage.setItem("cx_pcname", name); } catch (e) {}
+  $("pcStart").disabled = true;
+  try {
+    try { await pcOpen(); }
+    catch (e) { toast(e.name === "NotAllowedError" ? "Camera permission was refused" : "Couldn't open the camera"); return; }
+    try { pc.cam = await api("phonecam/start", {name}); } catch (e) { pcCloseTracks(); quiet(e); return; }
+    pc.run = true; pc.sent = 0; pc.t0 = Date.now();
+    $("pcIdle").classList.add("hidden"); $("pcLive").classList.remove("hidden");
+    $("pcInfo").textContent = "Connecting…";
+    pcWake(); pcLoop(); toast(pc.cam.name + " is on");
+  } finally { $("pcStart").disabled = false; }
+};
+$("pcStop").onclick = () => { tap(); pcStop(true); };
+$("pcFlip").onclick = async () => {
+  tap(); pc.facing = pc.facing === "environment" ? "user" : "environment";
+  try { await pcOpen(); } catch (e) { toast("Couldn't switch camera"); }
+};
+document.addEventListener("visibilitychange", () => { if (!document.hidden) pcWake(); });
+
+function pcStop(tell) {
+  const cam = pc.cam; pc.run = false; pc.cam = null;
+  pcCloseTracks(); $("pcVideo").srcObject = null;
+  if (pc.lock) { pc.lock.release().catch(() => {}); pc.lock = null; }
+  $("pcLive").classList.add("hidden"); $("pcIdle").classList.remove("hidden"); pcPill();
+  if (tell && cam) api(`phonecam/${encodeURIComponent(cam.id)}/stop`, {}).catch(() => {});
+}
+
+async function pcLoop() {
+  const v = $("pcVideo"), c = pc.canvas;
+  pcPill();
+  while (pc.run) {
+    const started = Date.now();
+    if (v.videoWidth && !document.hidden) {
+      const k = Math.min(1, 960 / v.videoWidth);
+      c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k);
+      c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+      const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.6));
+      if (blob && pc.run) {
+        try {
+          const r = await fetch(`/api/phonecam/${encodeURIComponent(pc.cam.id)}/frame`,
+                                {method: "POST", headers: {"Content-Type": "image/jpeg"}, body: blob});
+          const d = await r.json().catch(() => ({}));
+          if (r.status === 401) { pcStop(false); showLogin(); return; }
+          if (!r.ok) { toast(d.error || "Camera stopped"); pcStop(false); refresh(); return; }
+          pc.sent++; $("offline").classList.add("hidden");
+          $("pcBadge").textContent = d.motion ? "● MOTION" : "● LIVE";
+          $("pcBadge").classList.toggle("alert", !!d.motion);
+          const rate = pc.sent / Math.max(1, (Date.now() - pc.t0) / 1000);
+          $("pcInfo").textContent = `Sending to CYPHER-X · ${rate.toFixed(1)}/s` + (d.armed ? " · armed" : "");
+        } catch (e) { $("pcInfo").textContent = "Can't reach CYPHER-X — retrying…"; await sleep(1500); }
+      }
+    } else if (document.hidden) { $("pcInfo").textContent = "Paused — bring this page back to the front"; }
+    await sleep(Math.max(0, PC_EVERY_MS - (Date.now() - started)));
+  }
+}
+
+/* ---------------- fridge ---------------- */
+function renderFridge(f) {
+  $("frAi").textContent = f.ai.ready ? `Photos are counted by ${f.ai.provider}`
+    : "No AI set up yet — photos are kept and you correct the counts with − / +";
+  const low = f.items.filter(v => v.low);
+  $("frSum").textContent = low.length ? `${low.length} running low` : "";
+  $("frList").innerHTML = f.items.length ? f.items.map(v => {
+    const shown = v.rate && Math.abs(v.estimate - v.count) >= 0.5 ? "≈" + Math.round(v.estimate) : String(v.count);
+    const detail = v.rate ? `${v.rate.toFixed(1)} a day · ${v.days_left < 1 ? "runs out today" : v.days_left < 2 ? "runs out tomorrow"
+      : "runs out in " + Math.round(v.days_left) + " days"}`
+      : "learning how fast it goes";
+    return `<div class="li fr-row ${v.low ? "low" : ""}">
+      <div class="grow"><b>${esc(v.name)}</b><small>${v.low ? "Running low · " : ""}${esc(detail)}</small></div>
+      <button class="qty" data-fr="${esc(v.id)}" data-d="-1" aria-label="Took one ${esc(v.name)}">−</button>
+      <span class="num">${shown}</span>
+      <button class="qty" data-fr="${esc(v.id)}" data-d="1" aria-label="Added one ${esc(v.name)}">+</button></div>`;
+  }).join("") : `<div class="li"><div class="grow"><b>Nothing tracked yet</b><small>Check a photo of the open fridge</small></div></div>`;
+  if (f.last) {
+    $("frWhen").textContent = [f.last.provider || "Not counted", ago(f.last.ts), f.last.note].filter(Boolean).join(" · ");
+    if (f.last.has_photo && $("frImg").dataset.ts !== String(f.last.ts)) {
+      $("frImg").dataset.ts = String(f.last.ts); $("frImg").src = "/api/fridge/photo.jpg?t=" + f.last.ts;
+    }
+  }
+}
+$("frImg").onload = () => $("frEmpty").classList.add("hidden");
+$("frList").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-fr]"); if (!b) return;
+  tap();
+  try { await api(`fridge/${encodeURIComponent(b.dataset.fr)}/adjust`, {delta: Number(b.dataset.d)}); refresh(); }
+  catch (err) { quiet(err); }
+});
+$("frAdd").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("frName").value.trim(); if (!name) return;
+  try {
+    await api("fridge/add", {name, count: Number($("frCount").value || 0)});
+    $("frName").value = ""; $("frCount").value = ""; toast(name + " added"); refresh();
+  } catch (err) { quiet(err); }
+});
+async function shrinkPhoto(file, max) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i);
+      i.onerror = () => bad(new Error("That file isn't a picture")); i.src = url; });
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+  } finally { URL.revokeObjectURL(url); }
+}
+$("frFile").addEventListener("change", async () => {
+  const file = $("frFile").files[0]; $("frFile").value = "";
+  if (!file) return;
+  const btn = $("frPhotoBtn"), out = $("frResult");
+  btn.classList.add("busy"); out.classList.remove("hidden");
+  out.textContent = "Counting what's in the photo… (the AI can take up to a minute)";
+  try {
+    const blob = await shrinkPhoto(file, 1600);
+    const r = await fetch("/api/fridge/photo", {method: "POST", headers: {"Content-Type": "image/jpeg"}, body: blob});
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 401) { showLogin(); return; }
+    if (!r.ok) throw new Error(d.error || "Couldn't count the photo");
+    out.textContent = d.manual ? "Photo saved. No AI is set up, so correct the counts with − / +."
+      : `Counted by ${d.provider}:\n${d.text}` + (d.note ? `\n\nNote: ${d.note}` : "");
+    tap(); refresh();
+  } catch (e) { out.textContent = e.message === "Failed to fetch" ? "Can't reach CYPHER-X" : e.message; }
+  finally { btn.classList.remove("busy"); }
+});
 
 /* ---------------- money ---------------- */
 function renderMoney(b, g) {

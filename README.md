@@ -119,6 +119,29 @@ themselves — press **Start discovery**:
 - **Arm** to get a Windows notification on motion. Manual snapshots, manual recording and optional record-on-motion (local cameras), saved as MP4.
 - Cameras only turn on when you press Start, or at launch when "Start with CypherX" is ticked. Snapshots and clips older than the retention period (default 14 days) are deleted automatically. Files are under `%LOCALAPPDATA%\CyberOps\cctv`.
 - Needs QtMultimedia, which comes with the full `PySide6` package (not `PySide6-Essentials`).
+- **A phone as a camera**, two ways:
+  - *With a camera app* — run **IP Webcam** (Android) or **DroidCam** on the phone, then **Add camera → Phone camera app** and type the phone's IP. Best for a spare phone left in place: full video, keeps running with the screen off.
+  - *With no app* — open the dashboard's secure address (`https://<this PC's IP>:8443`, shown under Server → Services → Web dashboard) on the phone, accept the one-time certificate warning, then **Security → Use this phone as a camera**. The phone sends about 2–3 pictures a second; motion detection, snapshots and alerts work as for any camera (no recording). Keep the page open.
+
+## Fridge (a fridge that isn't smart)
+
+- **Smart Home → Fridge** keeps count of what's inside: eggs, drinks, anything you track.
+- **Counts come from:** ticking items as bought in Groceries (a crate = 30 eggs; set pack sizes and
+  grocery names per item), a **photo checked by AI**, −/+ taps (desktop, phone dashboard) and Telegram
+  (`/took 2 eggs`, `/add 6 beer`, `/fridge`).
+- It learns how fast each item goes, shows an estimate between photos and "runs out in N days".
+  When something runs low you get a notification and a Telegram alert, and it goes on the shopping list.
+- **Photo check:** phone dashboard → Fridge → *Check with a photo*, send the photo to the Telegram bot,
+  pick a file on the PC, or use a live CCTV camera.
+- **Fridge → AI settings** — pick who counts the photo, with an optional backup if the first fails:
+  - Free: **Google Gemini** (free key from aistudio.google.com), **OpenRouter** (free models),
+    **Groq** (free tier), **Ollama** on this PC (offline, no key; `ollama pull qwen2.5vl:7b`).
+  - Paid: **Claude** (most accurate; `pip install anthropic`), **OpenAI**.
+  - Any OpenAI-compatible server (LM Studio, vLLM…), or **no AI**: photos are kept and you correct by hand.
+  - Keys stay on this PC. **Test** checks the connection.
+- **Optional fridge camera:** an ESP32-S3 camera board inside the fridge counts by itself each time the door opens
+  (and warns if the door is left open). Firmware and fitting tips in [`firmware/fridge_cam`](firmware/fridge_cam/README.md);
+  turn it on in Server → Services → Fridge camera.
 
 ## App-wide Experience
 
