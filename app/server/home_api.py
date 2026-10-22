@@ -61,7 +61,9 @@ class HomeApi:
                 "measured": inv is not None and inv.load_w() is not None,
                 "charging_w": inv.charging_w() if inv is not None else None,
             },
-            "grid": {"watching": home.grid_watching(), "off_since": out["start"] if out else None,
+            "grid": {"watching": home.grid_watching(),
+                     "week": [{"day": d.strftime("%a"), "date": d.strftime("%d %b"), "hours": round(h, 2)}
+                              for d, h in e.daily_outage_hours(7)], "off_since": out["start"] if out else None,
                      "cuts_24h_h": round(e.outage_hours(time.time() - 86400), 2)},
             "meter": {"units_left": e.units_left(), "days_left": e.days_left(), "kwh_per_day": e.burn_rate(),
                       "price": e.price_per_kwh()},
@@ -70,6 +72,7 @@ class HomeApi:
                          "kind": d.get("kind"), "watts": d["device"]["watts"], "on": d["device"]["on"],
                          "live_w": m.live_w(d["id"])}
                         for d in sorted(m.devices(), key=lambda d: (d["room"], d["name"]))],
+            "weather": getattr(getattr(self.w, "weather", None), "now", None),
             "security": {
                 "armed": bool(cctv.store.config.get("armed")),
                 "cameras": [{"id": cid, "name": f.cam["name"], "live": f.running, "source": f.cam["source"]}

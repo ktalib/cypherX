@@ -16,6 +16,7 @@ Times are POSIX timestamps (seconds).
 """
 import json
 import time
+from datetime import datetime, timedelta
 
 from app.config import USER_DATA_DIR
 
@@ -192,6 +193,23 @@ class EnergyLog:
             if end > since:
                 total += end - max(start, since)
         return total / 3600.0
+
+    def daily_outage_hours(self, days=7, now=None):
+        """[(midnight of the day, hours without grid)] for the last `days` days, oldest first, today last."""
+        now = now or time.time()
+        today = datetime.fromtimestamp(now).replace(hour=0, minute=0, second=0, microsecond=0)
+        out = []
+        for k in range(days - 1, -1, -1):
+            d0 = today - timedelta(days=k)
+            t0, t1 = d0.timestamp(), min(now, (d0 + timedelta(days=1)).timestamp())
+            secs = sum(max(0.0, min(o.get("end") or now, t1) - max(o["start"], t0)) for o in self.outages)
+            out.append((d0, secs / 3600.0))
+        return out
+
+    def longest_outage_hours(self, since, now=None):
+        now = now or time.time()
+        spans = [((o.get("end") or now) - o["start"]) / 3600.0 for o in self.outages if (o.get("end") or now) >= since]
+        return max(spans) if spans else 0.0
 
 
 def read_grid_from_charger():

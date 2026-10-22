@@ -97,7 +97,7 @@ class DeviceCard(QFrame):
         kind = d.get("kind", "")
         icon = next((v for k, v in KIND_ICON.items() if k in kind), "plug")
         linked = d.get("linked_item")
-        self.icon.setPixmap(get_pixmap(icon, "#04131d" if online else SOFT, 18))
+        self.icon.setPixmap(get_pixmap(icon, "#1c0d02" if online else SOFT, 18))
         self.icon.setStyleSheet(f"background:{ACCENT if online else 'rgba(255,255,255,0.08)'};border-radius:17px;")
         self.name.setText(self.view.book.label(self.dev_id))
         self.sub.setText(f"{d.get('brand', '')} · {kind}")
@@ -160,7 +160,7 @@ class DeviceCard(QFrame):
         self.link.setCurrentIndex(max(0, idx))
         self._filling = False
         n = self.objectName()
-        border = "rgba(56,189,248,0.55)" if linked else "rgba(255,255,255,0.10)"
+        border = "rgba(255,122,26,0.55)" if linked else "rgba(255,255,255,0.10)"
         self.setStyleSheet(f"QFrame#{n}{{background:rgba(255,255,255,0.04);border:1px solid {border};"
                            f"border-radius:16px;}}")
 

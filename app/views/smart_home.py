@@ -328,7 +328,7 @@ class SmartHomeView(QWidget):
         lo.addLayout(grid)
         self.runtime_lbl = QLabel()
         self.runtime_lbl.setWordWrap(True)
-        self.runtime_lbl.setStyleSheet("color:#7fd4ff;font-size:12px;font-weight:600;background:transparent;")
+        self.runtime_lbl.setStyleSheet("color:#ffb27a;font-size:12px;font-weight:600;background:transparent;")
         lo.addWidget(self.runtime_lbl)
         self.source.currentTextChanged.connect(self._power_changed)
         for w in (self.inv, self.bat, self.pct):
@@ -450,7 +450,7 @@ class SmartHomeView(QWidget):
         frac = load / cap
         self.load_lbl.setText(f"{load:,.0f} W")
         self.load_bar.setValue(int(min(100, frac * 100)))
-        color = "#ff5d6c" if frac > 0.9 else "#ffb547" if frac > 0.7 else "#38bdf8"
+        color = "#f87171" if frac > 0.9 else "#fbbf24" if frac > 0.7 else "#ff7a1a"
         self.load_bar.setStyleSheet(f"QProgressBar::chunk{{background:{color};border-radius:4px;}}")
         on = [d for d in m.devices() if d["device"]["on"]]
         inv = getattr(self, "inverter", None)
@@ -519,7 +519,7 @@ class SmartHomeView(QWidget):
             watts = QPushButton(f"{live:.0f} W live" if live is not None else f"{dev['watts']:g} W")
             watts.setCursor(Qt.PointingHandCursor)
             watts.setToolTip("Edit, or remove this appliance")
-            watts.setStyleSheet("QPushButton{background:transparent;border:none;color:#7fd4ff;"
+            watts.setStyleSheet("QPushButton{background:transparent;border:none;color:#ffb27a;"
                                 "font-size:12px;font-weight:700;padding:0 4px;}"
                                 "QPushButton:hover{text-decoration:underline;}")
             watts.clicked.connect(lambda _=False, i=d["id"]: self._device_menu(i))

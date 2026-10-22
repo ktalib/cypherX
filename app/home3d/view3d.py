@@ -206,6 +206,12 @@ class House3DView(QWidget):
         self._timer.timeout.connect(self._tick)
         self._timer.start(33)
         self._cam_anim = None
+        self.bg = (QColor(18, 30, 46), QColor(5, 9, 15))     # backdrop: centre, edges
+        self.grid_color = QColor(127, 212, 255, 22)          # floor grid lines
+        # label colours: rooms, appliances that are on, and the outline (cool by default)
+        self.tag_colors = {"room_bg": QColor(10, 16, 26, 200), "room_fg": QColor(223, 243, 255),
+                           "on_bg": QColor(8, 40, 30, 215), "on_fg": QColor(150, 255, 200),
+                           "on_dot": QColor(110, 240, 170), "line": QColor(127, 212, 255)}
 
     # ------------------------------------------------------------- camera --
 
@@ -255,6 +261,15 @@ class House3DView(QWidget):
         anim.valueChanged.connect(step)
         anim.start()
         self._cam_anim = anim
+
+    def use_warm_theme(self):
+        """The warm home look: graphite backdrop, orange labels."""
+        self.bg = (QColor(46, 36, 28), QColor(14, 12, 11))
+        self.grid_color = QColor(255, 170, 110, 18)
+        self.tag_colors = {"room_bg": QColor(24, 20, 17, 215), "room_fg": QColor(250, 250, 249),
+                           "on_bg": QColor(58, 30, 12, 225), "on_fg": QColor(255, 207, 170),
+                           "on_dot": QColor(255, 122, 26), "line": QColor(255, 222, 196)}
+        self.invalidate()
 
     def set_mode(self, mode):
         self.mode = mode
@@ -512,7 +527,9 @@ class House3DView(QWidget):
             if fc.special == "ghost":
                 c = QColor(fc.color)
                 c.setAlpha(70)
-                p.setPen(QPen(QColor(127, 212, 255, 90), 1))
+                edge = QColor(self.tag_colors["line"])
+                edge.setAlpha(90)
+                p.setPen(QPen(edge, 1))
                 p.setBrush(c)
                 p.drawPolygon(poly)
                 if fc.item:
@@ -559,7 +576,7 @@ class House3DView(QWidget):
 
     def _paint_ground(self, p, proj):
         x0, z0, x1, z1 = self._bounds()
-        p.setPen(QPen(QColor(127, 212, 255, 22), 1))
+        p.setPen(QPen(self.grid_color, 1))
         for gx in range(int(x0) - 3, int(x1) + 4):
             a, b = proj((gx, -0.01, z0 - 3)), proj((gx, -0.01, z1 + 3))
             if a and b:
@@ -573,8 +590,8 @@ class House3DView(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         g = QRadialGradient(self.width() / 2, self.height() * 0.45, max(self.width(), self.height()) * 0.8)
-        g.setColorAt(0, QColor(18, 30, 46))
-        g.setColorAt(1, QColor(5, 9, 15))
+        g.setColorAt(0, self.bg[0])
+        g.setColorAt(1, self.bg[1])
         p.fillRect(self.rect(), g)
         if self._cache is None or self._cache.size() / max(1.0, self._cache.devicePixelRatio()) != self.size():
             self._render_static()
@@ -635,7 +652,7 @@ class House3DView(QWidget):
                 for q in pts[1:]:
                     path.lineTo(q[0])
                 watts = self.model.device_w(d) or d["device"]["watts"]
-                col = QColor(255, 181, 71) if watts >= 100 else QColor(127, 212, 255)
+                col = QColor(255, 181, 71) if watts >= 100 else QColor(self.tag_colors["line"])
                 glow = QColor(col)
                 glow.setAlpha(50)
                 p.setBrush(Qt.NoBrush)
@@ -649,8 +666,11 @@ class House3DView(QWidget):
             hp = self._anchor2d("hub")
             if hp:
                 gg = QRadialGradient(hp, 26)
-                gg.setColorAt(0, QColor(127, 212, 255, 160))
-                gg.setColorAt(1, QColor(127, 212, 255, 0))
+                hub = QColor(self.tag_colors["line"])
+                hub.setAlpha(160)
+                gg.setColorAt(0, hub)
+                hub.setAlpha(0)
+                gg.setColorAt(1, hub)
                 p.setPen(Qt.NoPen)
                 p.setBrush(gg)
                 p.drawEllipse(hp, 26, 26)
@@ -679,8 +699,10 @@ class House3DView(QWidget):
 
         # hover outline
         if self._hover:
-            p.setBrush(QColor(127, 212, 255, 40))
-            p.setPen(QPen(QColor(127, 212, 255), 1.6))
+            hl = QColor(self.tag_colors["line"])
+            p.setPen(QPen(hl, 1.6))
+            hl.setAlpha(40)
+            p.setBrush(hl)
             for poly, iid in self._hit:
                 if iid == self._hover:
                     p.drawPolygon(poly)
@@ -695,7 +717,7 @@ class House3DView(QWidget):
                 if c:
                     load = model.load_w(room["id"])
                     self._tag(p, c[0], f"{room['name'].upper()}   {load:.0f} W",
-                              QColor(10, 16, 26, 200), QColor(223, 243, 255), f, True)
+                              self.tag_colors["room_bg"], self.tag_colors["room_fg"], f, True)
             f.setPixelSize(11)
             f.setBold(False)
             for d in model.devices():
@@ -712,9 +734,9 @@ class House3DView(QWidget):
                 txt = f"{d['name']}  ·  {live if live is not None else d['device']['watts']:.0f} W" \
                       + ("  live" if live is not None else "")
                 self._tag(p, QPointF(a.x(), a.y() - 16), txt,
-                          QColor(8, 40, 30, 215) if on else QColor(15, 18, 24, 190),
-                          QColor(150, 255, 200) if on else QColor(170, 180, 195), f, False,
-                          dot=QColor(110, 240, 170) if on else QColor(110, 115, 125),
+                          self.tag_colors["on_bg"] if on else QColor(15, 18, 24, 190),
+                          self.tag_colors["on_fg"] if on else QColor(170, 180, 195), f, False,
+                          dot=self.tag_colors["on_dot"] if on else QColor(110, 115, 125),
                           bold=d["id"] == self._hover)
 
     def _tag(self, p, pt, text, bg, fg, font, big, dot=None, bold=False):
@@ -723,7 +745,9 @@ class House3DView(QWidget):
         w = fm.horizontalAdvance(text) + (26 if dot else 16)
         h = 24 if big else 20
         r = QRectF(pt.x() - w / 2, pt.y() - h / 2, w, h)
-        p.setPen(QPen(QColor(127, 212, 255, 200 if bold else 70), 1.4 if bold else 1))
+        line = QColor(self.tag_colors["line"])
+        line.setAlpha(200 if bold else 70)
+        p.setPen(QPen(line, 1.4 if bold else 1))
         p.setBrush(bg)
         p.drawRoundedRect(r, h / 2, h / 2)
         x = r.left() + 8

@@ -21,7 +21,7 @@ home's power system, cameras and (soon) smart plugs.
 | Inverter data | Waiting — check the back panel for a data port |
 | Tested on the Windows laptop | **Not yet** — everything so far was tested on a Linux cloud machine |
 
-**Codebase:** about 27,900 lines (Python / PySide6 + one HTML page for phones), 99 unit tests (98 pass — see §5).
+**Codebase:** about 27,900 lines (Python / PySide6 + one HTML page for phones), 102 unit tests (101 pass — see §5).
 
 ---
 
@@ -41,6 +41,7 @@ home's power system, cameras and (soon) smart plugs.
 | 10 | 19 Oct | [#8](https://github.com/ktalib/cypherX/pull/8) | **Phone as a CCTV camera** — *Add camera → Phone camera app* (IP Webcam / DroidCam: just the phone's IP); or no app at all: the dashboard also runs on a secure port (self-made HTTPS certificate) where *Security → Use this phone as a camera* streams pictures into CCTV with motion detection and alerts |
 | 11 | 19 Oct | [#9](https://github.com/ktalib/cypherX/pull/9) | **Fridge stock** — counts for a fridge that isn't smart: bought groceries add stock, AI photo checks correct it (Gemini, OpenRouter, Groq, Ollama — free; Claude, OpenAI — paid; backup provider), usage rates, "runs out in", low alerts onto the shopping list; on the desktop, phone dashboard (Fridge tab) and Telegram (send a photo, /fridge, /took, /add); optional ESP32-S3 fridge camera service + firmware |
 | 12 | 22 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Inverter measured with two smart plugs** — grid side (power cuts without the laptop charger, charging watts) and house side (real load used for runtime and % of inverter); never switched; [hardware guide and shopping list](HARDWARE.md) |
+| 13 | 22 Oct | _same branch_ | **New look for the Smart Home, desktop and phone** — warm graphite + orange design system; Home Dashboard rebuilt around the 3D house with floating live stats, a rooms panel with toggles, power dial, live camera card, power cuts this week, meter / fridge / energy cards; weather + solar outlook (Open-Meteo); phone dashboard redesigned to match, with a light/dark button |
 
 ---
 
@@ -102,8 +103,8 @@ start automatically, settings, actions and its own log. A **watchdog** restarts 
 
 ## 5. Testing
 
-- **Unit tests:** 99 (fridge + AI providers 15, inverter plugs 5, energy log 9, smart device discovery 9, plug control 8, CCTV 9, network watch + backups 7,
-  accounts/bills/groceries 6, service manager 6, Telegram 6, server checks 5, web dashboard 8, original 6). 98 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
+- **Unit tests:** 102 (fridge + AI providers 15, inverter plugs 5, weather 3, energy log 9, smart device discovery 9, plug control 8, CCTV 9, network watch + backups 7,
+  accounts/bills/groceries 6, service manager 6, Telegram 6, server checks 5, web dashboard 8, original 6). 101 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
   tests run on Linux (`C:\Windows` isn't an absolute path there).
 - **App checks:** each feature was run headless on a Linux cloud machine with sample data and screenshotted —
   layouts, navigation between Home and Server, sign-in, roles, lock, motion detection with synthetic frames.

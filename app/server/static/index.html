@@ -14,30 +14,39 @@
 <title>CYPHER-X Home</title>
 <style>
   :root {
-    --bg: #060b12; --bg2: #0b1622; --surface: rgba(19, 29, 41, 0.82); --surface2: rgba(255,255,255,0.05);
-    --line: rgba(255,255,255,0.08); --line2: rgba(255,255,255,0.14);
-    --text: #f1f5f9; --soft: #cbd5e1; --muted: #94a3b8; --dim: #64748b;
-    --accent: #38bdf8; --accent-ink: #04131d; --good: #22c55e; --good-bg: rgba(34,197,94,.14);
-    --warn: #f59e0b; --warn-bg: rgba(245,158,11,.14); --bad: #f43f5e; --bad-bg: rgba(244,63,94,.14);
-    --track: rgba(255,255,255,0.08); --shadow: 0 10px 30px rgba(0,0,0,.35);
-    --radius: 20px; --tab-h: 64px; --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
+    --bg: #0c0b0a; --bg2: #161412; --surface: rgba(30, 28, 26, 0.92); --surface2: rgba(255,255,255,0.055);
+    --line: rgba(255,255,255,0.07); --line2: rgba(255,255,255,0.13);
+    --text: #fafaf9; --soft: #d6d3d1; --muted: #a8a29e; --dim: #78716c;
+    --accent: #ff7a1a; --accent2: #ffb066; --accent-ink: #1c0d02; --good: #34d399; --good-bg: rgba(52,211,153,.14);
+    --warn: #fbbf24; --warn-bg: rgba(251,191,36,.14); --bad: #f87171; --bad-bg: rgba(248,113,113,.14);
+    --track: rgba(255,255,255,0.08); --shadow: 0 12px 32px rgba(0,0,0,.35); --glass: rgba(18,16,14,.62);
+    --radius: 24px; --tab-h: 64px; --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
   }
+  /* light follows the phone, unless the theme button picked one (data-theme on <html>) */
   @media (prefers-color-scheme: light) {
-    :root {
-      --bg: #f3f6fa; --bg2: #e8eef6; --surface: rgba(255,255,255,0.92); --surface2: rgba(15,23,42,0.04);
-      --line: rgba(15,23,42,0.08); --line2: rgba(15,23,42,0.14);
-      --text: #0f172a; --soft: #334155; --muted: #64748b; --dim: #94a3b8;
-      --accent: #0284c7; --accent-ink: #ffffff; --good: #16a34a; --good-bg: rgba(22,163,74,.12);
-      --warn: #d97706; --warn-bg: rgba(217,119,6,.12); --bad: #e11d48; --bad-bg: rgba(225,29,72,.10);
-      --track: rgba(15,23,42,0.08); --shadow: 0 8px 24px rgba(15,23,42,.08);
+    :root:not([data-theme="dark"]) {
+      --bg: #f4f1ed; --bg2: #ebe6e0; --surface: rgba(255,255,255,0.96); --surface2: rgba(28,25,23,0.05);
+      --line: rgba(28,25,23,0.08); --line2: rgba(28,25,23,0.14);
+      --text: #1c1917; --soft: #44403c; --muted: #78716c; --dim: #a8a29e;
+      --accent: #f26a0d; --accent2: #ff9b52; --accent-ink: #ffffff; --good: #059669; --good-bg: rgba(5,150,105,.11);
+      --warn: #d97706; --warn-bg: rgba(217,119,6,.12); --bad: #dc2626; --bad-bg: rgba(220,38,38,.10);
+      --track: rgba(28,25,23,0.08); --shadow: 0 8px 24px rgba(28,25,23,.07); --glass: rgba(255,255,255,.72);
     }
+  }
+  :root[data-theme="light"] {
+      --bg: #f4f1ed; --bg2: #ebe6e0; --surface: rgba(255,255,255,0.96); --surface2: rgba(28,25,23,0.05);
+      --line: rgba(28,25,23,0.08); --line2: rgba(28,25,23,0.14);
+      --text: #1c1917; --soft: #44403c; --muted: #78716c; --dim: #a8a29e;
+      --accent: #f26a0d; --accent2: #ff9b52; --accent-ink: #ffffff; --good: #059669; --good-bg: rgba(5,150,105,.11);
+      --warn: #d97706; --warn-bg: rgba(217,119,6,.12); --bad: #dc2626; --bad-bg: rgba(220,38,38,.10);
+      --track: rgba(28,25,23,0.08); --shadow: 0 8px 24px rgba(28,25,23,.07); --glass: rgba(255,255,255,.72);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
     font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Inter, sans-serif;
     -webkit-font-smoothing: antialiased; }
-  body { background: radial-gradient(110% 55% at 15% -5%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
-                     radial-gradient(90% 50% at 100% 0%, color-mix(in srgb, var(--good) 10%, transparent), transparent 55%), var(--bg);
+  body { background: radial-gradient(120% 50% at 0% -10%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 60%),
+                     radial-gradient(80% 40% at 110% 0%, color-mix(in srgb, var(--accent2) 7%, transparent), transparent 55%), var(--bg);
          background-attachment: fixed; }
   button, input { font: inherit; color: inherit; }
   button { cursor: pointer; border: none; background: none; padding: 0; }
@@ -54,7 +63,7 @@
     -webkit-backdrop-filter: saturate(160%) blur(16px); border-bottom: 1px solid var(--line); }
   .top-row { display: flex; align-items: center; gap: 12px; max-width: 1100px; margin: 0 auto; }
   .avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 800;
-    background: linear-gradient(135deg, var(--accent), var(--good)); color: #04131d; flex: none; }
+    background: linear-gradient(135deg, var(--accent2), var(--accent)); color: var(--accent-ink); flex: none; }
   .hello { flex: 1; min-width: 0; }
   .hello b { display: block; font-size: 17px; letter-spacing: -.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .hello span { font-size: 12px; color: var(--muted); }
@@ -78,42 +87,64 @@
   main { max-width: 1100px; margin: 0 auto; padding: 14px 16px 0; }
   .view { display: grid; gap: 12px; animation: fade .18s ease-out; }
   @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
-  .section-title { display: flex; align-items: center; justify-content: space-between; margin: 8px 2px 0;
-    font-size: 13px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
+  .section-title { display: flex; align-items: center; justify-content: space-between; margin: 10px 2px 0;
+    font-size: 17px; font-weight: 700; letter-spacing: -.2px; color: var(--text); }
   .section-title button { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: none; letter-spacing: 0; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px;
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
     box-shadow: var(--shadow); }
   .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 
-  /* ---------- hero ---------- */
-  .hero { display: grid; grid-template-columns: 132px 1fr; gap: 16px; align-items: center; }
-  .ring { position: relative; width: 132px; height: 132px; }
-  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-  .ring .trk { stroke: var(--track); } .ring .val { stroke: var(--accent); transition: stroke-dashoffset .6s ease, stroke .3s; }
-  .ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
-  .ring-center b { font-size: 26px; font-weight: 300; letter-spacing: -.5px; }
-  .ring-center span { font-size: 11px; color: var(--muted); }
-  .kv { display: grid; gap: 10px; }
-  .kv div { display: flex; flex-direction: column; }
-  .kv small { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
-  .kv strong { font-size: 17px; font-weight: 600; }
-
   /* ---------- quick actions ---------- */
   .actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .action { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px; border-radius: 16px;
-    background: var(--surface); border: 1px solid var(--line); font-size: 12px; font-weight: 700; color: var(--soft);
-    box-shadow: var(--shadow); min-height: 76px; justify-content: center; }
-  .action .ic { color: var(--accent); }
-  .action:active { transform: scale(.96); }
-  .action.on { background: var(--good-bg); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
-  .action.on .ic { color: var(--good); }
+  .action { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; font-weight: 700;
+    color: var(--soft); justify-content: center; }
+  .action .ic { width: 54px; height: 54px; padding: 16px; border-radius: 50%; color: var(--text); background: var(--surface);
+    border: 1px solid var(--line); box-shadow: var(--shadow); box-sizing: border-box; }
+  .action:active .ic { transform: scale(.94); }
+  .action.on .ic { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 
-  /* ---------- rooms ---------- */
-  .rooms { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 1fr); gap: 10px; overflow-x: auto;
-    scrollbar-width: none; scroll-snap-type: x mandatory; padding-bottom: 2px; }
-  .rooms::-webkit-scrollbar { display: none; }
-  .room { scroll-snap-align: start; padding: 14px; }
-  .room b { display: block; font-size: 14px; } .room .w { font-size: 22px; font-weight: 300; margin-top: 4px; }
+  /* ---------- home: weather, dial, week, camera ---------- */
+  .home { display: grid; gap: 14px; }
+  .hcol { display: grid; gap: 14px; align-content: start; }
+  .wx { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; overflow: hidden; position: relative;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, var(--surface)), var(--surface) 70%); }
+  .wx .t { font-size: 44px; font-weight: 300; letter-spacing: -1.5px; line-height: 1; }
+  .wx .d { font-size: 15px; font-weight: 600; margin-top: 4px; }
+  .wx .p { font-size: 12px; color: var(--muted); grid-column: 1 / -1; }
+  .wx .big { width: 64px; height: 64px; color: var(--accent); stroke-width: 1.6; }
+  .solar { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--soft); }
+  .solar .bar { flex: 1; margin: 0; }
+  .dial-card { display: grid; justify-items: center; gap: 6px; padding-bottom: 14px; }
+  .dial { position: relative; width: min(100%, 260px); aspect-ratio: 200 / 160; }
+  .dial svg { width: 100%; height: 100%; overflow: visible; }
+  .dial .trk { stroke: var(--track); } .dial .val { transition: stroke-dashoffset .6s ease; }
+  .dial .knob { fill: #fff; stroke: var(--accent); stroke-width: 4; transition: cx .6s ease, cy .6s ease; }
+  .dial-center { position: absolute; left: 0; right: 0; top: 34%; text-align: center; }
+  .dial-center b { display: block; font-size: 40px; font-weight: 300; letter-spacing: -1px; line-height: 1; }
+  .dial-center span { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .dial-ends { position: absolute; left: 6%; right: 6%; bottom: 0; display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); font-weight: 700; }
+  .stats3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
+  .stats3 div { background: var(--surface2); border-radius: 16px; padding: 10px 12px; }
+  .stats3 small { display: block; font-size: 11px; color: var(--muted); font-weight: 600; }
+  .stats3 b { font-size: 15px; font-weight: 700; white-space: nowrap; }
+  .weekbars { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; height: 160px; align-items: end; margin-top: 22px; }
+  .wb { display: grid; grid-template-rows: 1fr auto; justify-items: center; height: 100%; gap: 6px; }
+  .wb .tr { position: relative; width: 22px; height: 100%; border-radius: 999px; background: var(--surface2); display: flex; align-items: flex-end; }
+  .wb .fl { position: relative; width: 100%; border-radius: 999px; background: color-mix(in srgb, var(--accent) 55%, transparent); min-height: 0; transition: height .5s; }
+  .wb.today .fl { background: linear-gradient(var(--accent2), var(--accent)); }
+  .wb .val { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 800; white-space: nowrap; color: var(--text); }
+  .wb small { font-size: 11px; color: var(--dim); font-weight: 700; }
+  .wb.today small { color: var(--text); }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .card-head b { font-size: 16px; }
+  .cam-ctl { position: absolute; left: 0; right: 0; bottom: 12px; display: flex; justify-content: center; gap: 10px; }
+  .rbtn { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+    background: rgba(20,18,16,.55); border: 1px solid rgba(255,255,255,.18); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .rbtn.red { background: #ef4444; border-color: transparent; } .rbtn.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .rbtn:active { transform: scale(.93); }
+  .hcol .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+  /* ---------- bars ---------- */
   .bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; margin-top: 10px; }
   .bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width .5s; }
 
@@ -124,17 +155,17 @@
     font-size: 13px; font-weight: 700; color: var(--soft); white-space: nowrap; }
   .filters button.active { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
   .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .tile { position: relative; text-align: left; display: flex; flex-direction: column; gap: 10px; padding: 14px;
-    border-radius: 18px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
+  .tile { position: relative; text-align: left; display: flex; flex-direction: column; gap: 12px; padding: 16px;
+    border-radius: 22px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
     min-height: 120px; transition: background .2s, border-color .2s, transform .1s; }
   .tile:active { transform: scale(.97); }
-  .tile .ico { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center;
+  .tile .ico { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
     background: var(--surface2); color: var(--soft); transition: background .2s, color .2s; }
   .tile b { font-size: 14px; line-height: 1.2; }
   .tile small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
   .tile .row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-  .tile.on { background: color-mix(in srgb, var(--good) 12%, var(--surface)); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
-  .tile.on .ico { background: var(--good); color: #04140d; }
+  .tile.on { background: color-mix(in srgb, var(--accent) 13%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+  .tile.on .ico { background: var(--accent); color: var(--accent-ink); }
   .tile.pending { opacity: .65; }
   .live { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; color: var(--good); }
   .live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
@@ -142,7 +173,7 @@
     transition: background .2s; }
   .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
     background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s; }
-  .on .switch, .switch.on { background: var(--good); } .on .switch::after, .switch.on::after { transform: translateX(18px); }
+  .on .switch, .switch.on { background: var(--accent); } .on .switch::after, .switch.on::after { transform: translateX(18px); }
 
   /* ---------- lists ---------- */
   .list { display: grid; }
@@ -249,8 +280,7 @@
   /* ---------- tablet & desktop ---------- */
   @media (min-width: 640px) {
     .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .hero { grid-template-columns: 160px 1fr; } .ring { width: 160px; height: 160px; }
-    .kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .home { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
   }
   @media (min-width: 960px) {
     :root { --tab-h: 0px; }
@@ -264,7 +294,6 @@
       border-radius: 12px; font-size: 14px; }
     nav.tabs button.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
     .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .rooms { grid-auto-flow: row; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); overflow: visible; padding: 0; }
     .desk2 { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start; }
     .toast { bottom: 24px; }
   }
@@ -293,6 +322,14 @@
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
   <symbol id="i-flip" viewBox="0 0 24 24"><path d="M20 7h-3l-2-3H9L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M9 13a3 3 0 0 1 5.2-2M15 13a3 3 0 0 1-5.2 2"/><path d="M14 9v2h-2M10 17v-2h2"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9z"/></symbol>
+  <symbol id="i-cloud-sun" viewBox="0 0 24 24"><path d="M12 2v2M4.9 4.9l1.4 1.4M20 12h2M19.1 4.9l-1.4 1.4"/><path d="M15.9 13A4 4 0 0 0 8.4 9.4"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6z"/></symbol>
+  <symbol id="i-rain" viewBox="0 0 24 24"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M16 14v6M8 14v6M12 16v6"/></symbol>
+  <symbol id="i-storm" viewBox="0 0 24 24"><path d="M6 16.3A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 .5 9"/><path d="m13 12-3 5h4l-3 5"/></symbol>
+  <symbol id="i-fog" viewBox="0 0 24 24"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M16 17H7M17 21H9"/></symbol>
+  <symbol id="i-max" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
   <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M2 2l20 20"/><path d="M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5.2-2.8M19 13a10 10 0 0 0-2.2-1.6M12 20h.01"/></symbol>
 </svg>
 
@@ -318,6 +355,7 @@
     <div class="top-row">
       <div class="avatar" id="avatar">A</div>
       <div class="hello"><b id="greet">Hello</b><span id="when">—</span></div>
+      <button class="icon-btn" id="themeBtn" aria-label="Light or dark"><svg class="ic sm" id="themeIc"><use href="#i-moon"/></svg></button>
       <button class="icon-btn" id="refreshBtn" aria-label="Refresh"><svg class="ic sm" id="refreshIc"><use href="#i-refresh"/></svg></button>
       <button class="icon-btn" id="logout" aria-label="Sign out"><svg class="ic sm"><use href="#i-logout"/></svg></button>
     </div>
@@ -328,20 +366,32 @@
     <!-- HOME -->
     <section class="view" id="v-home">
       <div class="skel" id="skel"></div>
-      <div class="desk2" id="homeBody" hidden>
-        <div style="display:grid;gap:12px">
-          <div class="card hero">
-            <div class="ring" aria-label="Live load">
-              <svg viewBox="0 0 120 120"><circle class="trk" cx="60" cy="60" r="52" stroke-width="10" fill="none"/>
-                <circle class="val" id="ringVal" cx="60" cy="60" r="52" stroke-width="10" fill="none" stroke-linecap="round"
-                        stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg>
-              <div class="ring-center"><b id="loadW">0 W</b><span id="loadPct">of inverter</span></div>
+      <div class="home" id="homeBody" hidden>
+        <div class="hcol">
+          <div class="card wx" id="wxCard" hidden>
+            <div><div class="t" id="wxTemp">—</div><div class="d" id="wxDesc"></div></div>
+            <svg class="ic big" id="wxIc"><use href="#i-cloud-sun"/></svg>
+            <div class="p" id="wxPlace"></div>
+            <div class="solar" id="wxSolar"><span id="wxSolarTxt"></span><div class="bar"><i id="wxSolarBar" style="width:0"></i></div></div>
+          </div>
+          <div class="card dial-card">
+            <div class="card-head" style="width:100%"><b>Power</b><span class="pill dim" id="srcPill">Grid</span></div>
+            <div class="dial" aria-label="Live load">
+              <svg viewBox="0 0 200 160">
+                <defs><linearGradient id="dialGrad" x1="0" x2="1" y1="0" y2="0">
+                  <stop offset="0" stop-color="var(--accent2)"/><stop offset="1" stop-color="var(--accent)"/></linearGradient></defs>
+                <path class="trk" d="M30.7 140 A80 80 0 1 1 169.3 140" fill="none" stroke-width="14" stroke-linecap="round"/>
+                <path class="val" id="dialVal" d="M30.7 140 A80 80 0 1 1 169.3 140" fill="none" stroke="url(#dialGrad)"
+                      stroke-width="14" stroke-linecap="round" stroke-dasharray="335.1" stroke-dashoffset="335.1"/>
+                <circle class="knob" id="dialKnob" cx="30.7" cy="140" r="9"/>
+              </svg>
+              <div class="dial-center"><b id="loadW">0</b><span id="loadPct">watts</span></div>
+              <div class="dial-ends"><span>0</span><span id="dialMax">3 kW</span></div>
             </div>
-            <div class="kv">
-              <div><small>Spending now</small><strong id="perHour">—</strong></div>
-              <div><small>Battery</small><strong id="battery">—</strong></div>
-              <div><small>Typical day</small><strong id="perDay">—</strong></div>
-              <div><small>Meter</small><strong id="meterShort">—</strong></div>
+            <div class="stats3">
+              <div><small>Battery</small><b id="battery">—</b></div>
+              <div><small>Lasts</small><b id="runtime">—</b></div>
+              <div><small>Cost now</small><b id="perHour">—</b></div>
             </div>
           </div>
           <div class="actions">
@@ -350,12 +400,31 @@
             <button class="action" id="aCam"><svg class="ic"><use href="#i-camera"/></svg>Camera</button>
             <button class="action" id="aMeter"><svg class="ic"><use href="#i-gauge"/></svg>Meter</button>
           </div>
+          <div class="card">
+            <div class="card-head"><b>Power cuts this week</b><span class="pill dim" id="weekPill">—</span></div>
+            <div class="weekbars" id="weekBars"></div>
+            <div class="muted" style="font-size:12px;margin-top:10px" id="weekNote"></div>
+          </div>
         </div>
-        <div style="display:grid;gap:12px">
-          <div class="section-title">Rooms</div>
-          <div class="rooms" id="rooms"></div>
-          <div class="section-title">On now <button data-go="devices">All devices</button></div>
-          <div class="card list" id="onNow"></div>
+        <div class="hcol">
+          <div class="card" style="padding:10px">
+            <div class="cam" id="homeCam">
+              <img id="homeCamImg" alt="Camera"><div class="empty" id="homeCamEmpty">No camera picture yet</div>
+              <span class="badge" id="homeCamBadge">Camera</span>
+              <div class="cam-ctl">
+                <button class="rbtn" id="hcRefresh" aria-label="Refresh the picture"><svg class="ic sm"><use href="#i-refresh"/></svg></button>
+                <button class="rbtn" id="hcArm" aria-label="Arm or disarm"><svg class="ic sm"><use href="#i-shield"/></svg></button>
+                <button class="rbtn" id="hcOpen" aria-label="Open security"><svg class="ic sm"><use href="#i-max"/></svg></button>
+              </div>
+            </div>
+          </div>
+          <div class="section-title">Rooms <button data-go="devices">All devices</button></div>
+          <div class="filters" id="homeRooms"></div>
+          <div class="tiles" id="homeTiles"></div>
+          <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <div><small class="muted" style="font-weight:600">Meter</small><div style="font-size:20px;font-weight:600" id="meterShort">—</div></div>
+            <div style="text-align:right"><small class="muted" style="font-weight:600">Typical day</small><div style="font-size:20px;font-weight:600" id="perDay">—</div></div>
+          </div>
         </div>
       </div>
     </section>
@@ -617,37 +686,115 @@ function renderChrome(s) {
 }
 
 /* ---------------- home ---------------- */
+const WX_ICON = { sun: "sun", moon: "moon", cloud: "cloud", cloud_sun: "cloud-sun", cloud_drizzle: "rain", cloud_rain: "rain",
+                  cloud_lightning: "storm", cloud_fog: "fog", cloud_snow: "cloud" };
+const ARC = 335.1;
+let homeRoom = "all", homeCamAt = 0;
+function tileHtml(d) {
+  const w = d.live_w != null ? `<span class="live">${watts(d.live_w)} live</span>` : `${watts(d.watts)}`;
+  return `<button class="tile ${d.on ? "on" : ""} ${pending.has(d.id) ? "pending" : ""}" data-dev="${esc(d.id)}" aria-pressed="${d.on}">
+    <div class="row"><span class="ico">${icon(ICON[d.kind] || "plug")}</span><span class="switch"></span></div>
+    <div><b>${esc(d.name)}</b><small>${esc(d.room)} · ${w}</small></div></button>`;
+}
 function renderHome(s) {
   $("skel").classList.add("hidden"); $("homeBody").hidden = false;
   const p = s.power, frac = Math.min(1, p.load_w / Math.max(1, p.inverter_w));
-  const ring = $("ringVal"); ring.style.strokeDashoffset = 326.7 * (1 - frac);
-  ring.style.stroke = frac > .9 ? "var(--bad)" : frac > .7 ? "var(--warn)" : "var(--accent)";
-  $("loadW").textContent = watts(p.load_w);
-  $("loadPct").textContent = (p.measured ? "measured · " : "") + Math.round(frac * 100) + "% of "
-    + (p.inverter_w / 1000).toFixed(1).replace(".0", "") + " kW";
-  $("perHour").textContent = money(p.per_hour) + " / h";
-  $("battery").textContent = Math.round(p.battery_pct) + "%" + (p.runtime_h ? " · " + hours(p.runtime_h) : "");
+  // dial: 240° arc, knob at the value
+  $("dialVal").style.strokeDashoffset = ARC * (1 - frac);
+  const a = (150 + 240 * frac) * Math.PI / 180;
+  $("dialKnob").setAttribute("cx", (100 + 80 * Math.cos(a)).toFixed(1));
+  $("dialKnob").setAttribute("cy", (100 + 80 * Math.sin(a)).toFixed(1));
+  $("dialKnob").style.stroke = frac > .9 ? "var(--bad)" : frac > .7 ? "var(--warn)" : "var(--accent)";
+  $("loadW").textContent = Math.round(p.load_w).toLocaleString();
+  $("loadPct").textContent = "watts · " + (p.measured ? "measured · " : "") + Math.round(frac * 100) + "% of inverter";
+  $("dialMax").textContent = (p.inverter_w / 1000).toFixed(1).replace(".0", "") + " kW";
+  $("srcPill").textContent = s.grid.off_since ? "On battery" : p.charging_w > 5 ? "Grid · charging" : p.source;
+  $("srcPill").className = "pill " + (s.grid.off_since ? "warn" : "dim");
+  $("battery").textContent = Math.round(p.battery_pct) + "%";
+  $("runtime").textContent = p.runtime_h ? hours(p.runtime_h) : "—";
+  $("perHour").textContent = money(p.per_hour) + "/h";
   $("perDay").textContent = money(p.per_day);
-  $("meterShort").textContent = s.meter.units_left == null ? "No reading" : s.meter.units_left.toFixed(1) + " kWh";
+  $("meterShort").textContent = s.meter.units_left == null ? "No reading"
+    : s.meter.units_left.toFixed(1) + " kWh" + (s.meter.days_left != null ? " · " + hours(s.meter.days_left * 24) : "");
   const armBtn = $("aArm"); armBtn.classList.toggle("on", s.security.armed);
   armBtn.querySelector("span").textContent = s.security.armed ? "Armed" : "Arm";
-  const top = Math.max(1, ...s.rooms.map(r => r.load_w));
-  $("rooms").innerHTML = s.rooms.map(r => `<button class="card room" data-room="${esc(r.id)}" style="text-align:left">
-      <b>${esc(r.name)}</b><div class="w">${watts(r.load_w)}</div>
-      <div class="bar"><i style="width:${Math.max(r.load_w ? 6 : 0, r.load_w / top * 100)}%"></i></div></button>`).join("");
-  const on = s.devices.filter(d => d.on);
-  $("onNow").innerHTML = on.length ? on.map(d => `<div class="li">
-      <div class="tile on" style="all:unset"><span class="ico" style="width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:var(--good);color:#04140d">${icon(ICON[d.kind] || "plug", "sm")}</span></div>
-      <div class="grow"><b>${esc(d.name)}</b><small>${esc(d.room)}</small></div>
-      <span class="amt">${d.live_w != null ? `<span class="live">${watts(d.live_w)}</span>` : watts(d.watts)}</span></div>`).join("")
-    : `<div class="li"><div class="grow"><b>Everything is off</b><small>Nothing is drawing power</small></div></div>`;
+  $("hcArm").classList.toggle("on", s.security.armed);
+  renderWeather(s.weather);
+  renderWeek(s.grid);
+  // rooms → that room's appliances, with switches
+  const rooms = [["all", "All"], ...s.rooms.map(r => [r.id, r.name])];
+  if (!rooms.some(r => r[0] === homeRoom)) homeRoom = "all";
+  $("homeRooms").innerHTML = rooms.map(([id, n]) => `<button class="${id === homeRoom ? "active" : ""}" data-hroom="${esc(id)}">${esc(n)}</button>`).join("");
+  const roomName = Object.fromEntries(s.rooms.map(r => [r.id, r.name]));
+  const list = s.devices.filter(d => homeRoom === "all" || d.room === roomName[homeRoom])
+    .sort((x, y) => (y.on - x.on));
+  $("homeTiles").innerHTML = list.slice(0, homeRoom === "all" ? 6 : 99).map(tileHtml).join("")
+    || `<p class="muted">No appliances in this room.</p>`;
+  if (Date.now() - homeCamAt > 20000) loadHomeCam(s.security);
 }
-document.addEventListener("click", (e) => { const r = e.target.closest("[data-room]"); if (r) { roomFilter = r.dataset.room; go("devices"); } });
+function renderWeather(w) {
+  $("wxCard").hidden = !w || w.temp == null;
+  if (!w || w.temp == null) return;
+  $("wxTemp").textContent = Math.round(w.temp) + "°";
+  $("wxDesc").textContent = w.desc;
+  $("wxIc").innerHTML = `<use href="#i-${WX_ICON[w.icon] || "cloud"}"/>`;
+  $("wxPlace").textContent = [w.place, w.high != null ? `H ${Math.round(w.high)}°  L ${Math.round(w.low)}°` : "",
+                              w.humidity != null ? `Humidity ${w.humidity}%` : ""].filter(Boolean).join("  ·  ");
+  $("wxSolar").hidden = !w.solar;
+  if (w.solar) { $("wxSolarTxt").textContent = "Solar today: " + w.solar; $("wxSolarBar").style.width = Math.round(w.solar_score * 100) + "%"; }
+}
+function renderWeek(g) {
+  const days = g.week || [], top = Math.max(1, ...days.map(d => d.hours)), total = days.reduce((t, d) => t + d.hours, 0);
+  $("weekBars").innerHTML = days.map((d, i) => {
+    const today = i === days.length - 1, h = d.hours;
+    return `<div class="wb ${today ? "today" : ""}" title="${esc(d.date)}: ${h ? hours(h) + " without grid" : "no power cut"}">
+      <div class="tr"><div class="fl" style="height:${h ? Math.max(8, h / top * 100) : 0}%">${today && h ? `<span class="val">${hours(h)}</span>` : ""}</div></div>
+      <small>${today ? "Today" : esc(d.day)}</small></div>`;
+  }).join("");
+  const avg = total / 7, pill = $("weekPill");
+  if (!g.watching && !total) { pill.textContent = "Not watched"; pill.className = "pill dim";
+    $("weekNote").textContent = "Link a smart plug to the inverter input to log power cuts by themselves."; return; }
+  pill.textContent = avg.toFixed(1) + " h a day"; pill.className = "pill " + (avg >= 6 ? "bad" : avg >= 1 ? "warn" : "good");
+  $("weekNote").textContent = hours(total) + " without grid in 7 days";
+}
+function loadHomeCam(sec) {
+  homeCamAt = Date.now();
+  const img = $("homeCamImg"), live = sec && sec.cameras.some(c => c.live);
+  $("homeCamBadge").textContent = live ? "● Live" : sec && sec.latest ? `${sec.latest.camera} · ${ago(sec.latest.ts)}` : "Camera";
+  $("homeCamBadge").classList.toggle("alert", !!live);
+  img.onload = () => $("homeCamEmpty").classList.add("hidden");
+  img.onerror = () => { img.removeAttribute("src"); $("homeCamEmpty").classList.remove("hidden"); };
+  img.src = "/api/snapshot.jpg?t=" + Date.now();
+}
+document.addEventListener("click", (e) => {
+  const h = e.target.closest("[data-hroom]"); if (h) { tap(); homeRoom = h.dataset.hroom; renderHome(lastStatus); }
+});
 $("aAllOff").onclick = async () => { tap(); if (!confirm("Switch everything off? (The fridge stays on.)")) return;
   try { await api("alloff", {}); toast("Everything off — fridge kept on"); refresh(); } catch (e) { quiet(e); } };
 $("aArm").onclick = () => toggleArm();
 $("aCam").onclick = () => { tap(); go("security"); };
 $("aMeter").onclick = () => { tap(); openSheet("reading"); };
+$("hcRefresh").onclick = () => { tap(); loadHomeCam(lastStatus && lastStatus.security); };
+$("hcArm").onclick = () => toggleArm();
+$("hcOpen").onclick = () => { tap(); go("security"); };
+
+/* ---------------- theme ---------------- */
+function applyTheme(t) {
+  if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  const dark = t ? t === "dark" : !matchMedia("(prefers-color-scheme: light)").matches;
+  $("themeIc").innerHTML = `<use href="#i-${dark ? "sun" : "moon"}"/>`;
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.content = dark ? "#0c0b0a" : "#f4f1ed");
+}
+let theme = null;
+try { theme = localStorage.getItem("cx_theme"); } catch (e) {}
+applyTheme(theme);
+$("themeBtn").onclick = () => {
+  tap();
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark"
+    : !matchMedia("(prefers-color-scheme: light)").matches;
+  theme = dark ? "light" : "dark"; applyTheme(theme);
+  try { localStorage.setItem("cx_theme", theme); } catch (e) {}
+};
 
 /* ---------------- devices ---------------- */
 function renderDevices(s) {
@@ -656,12 +803,7 @@ function renderDevices(s) {
   $("filters").innerHTML = rooms.map(([id, n]) => `<button class="${id === roomFilter ? "active" : ""}" data-filter="${esc(id)}">${esc(n)}</button>`).join("");
   const roomName = Object.fromEntries(s.rooms.map(r => [r.id, r.name]));
   const list = s.devices.filter(d => roomFilter === "all" || d.room === roomName[roomFilter]);
-  $("tiles").innerHTML = list.map(d => {
-    const w = d.live_w != null ? `<span class="live">${watts(d.live_w)} live</span>` : `${watts(d.watts)}`;
-    return `<button class="tile ${d.on ? "on" : ""} ${pending.has(d.id) ? "pending" : ""}" data-dev="${esc(d.id)}" aria-pressed="${d.on}">
-      <div class="row"><span class="ico">${icon(ICON[d.kind] || "plug")}</span><span class="switch"></span></div>
-      <div><b>${esc(d.name)}</b><small>${esc(d.room)} · ${w}</small></div></button>`;
-  }).join("") || `<p class="muted">No appliances here.</p>`;
+  $("tiles").innerHTML = list.map(tileHtml).join("") || `<p class="muted">No appliances here.</p>`;
   const on = s.devices.filter(d => d.on).length;
   $("devHint").textContent = `${on} of ${s.devices.length} on · tap a tile to switch it`;
 }
