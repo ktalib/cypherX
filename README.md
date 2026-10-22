@@ -37,6 +37,11 @@ CYPHER-X is a modern, macOS / iOS Sonoma-inspired desktop operations hub and wid
 - **Battery readings**: log the charge % and / or voltage shown on the inverter or charge controller; the % updates the runtime estimate.
 - **Power-cut logging**: plug the laptop charger into a socket that is *not* on the inverter and tick "Detect power cuts". When the charger loses power CypherX logs an outage, notifies you and switches the power source to the inverter; hours without grid are totalled per day and week.
 - All entries are in the Energy log (with delete for typos) and stored in `smart_home_energy.json`, separate from the 3D layout.
+- **Inverter measured with two smart plugs**: one between the wall and the inverter's mains input, one between the
+  inverter's output and the extension board (Smart Devices → "Plugged in" → ⚡ Inverter input / output). CYPHER-X
+  then sees power cuts by itself (the input plug goes quiet while the output plug runs on the battery), the real
+  house load, and roughly how much goes into charging. It never switches these two plugs.
+- What to buy and how to fit it: [Doc/HARDWARE.md](Doc/HARDWARE.md).
 
 ## Sign-in, roles and the sidebar
 

@@ -11,6 +11,10 @@ Drivers (all local, over the home Wi-Fi):
 The PlugService polls every linked plug every few seconds and hands readings to
 the app (`apply(item_id, on, watts)`), and switches a plug when its appliance is
 switched anywhere in the app (`request(item_id, on)`).
+
+A plug can instead be linked to an inverter role (app/home3d/inverter.py): its
+readings — and its silences, which is how a power cut shows on the grid side —
+go to `on_role(role, reading, error)`, and it is never switched.
 """
 import json
 import queue
@@ -22,6 +26,7 @@ import urllib.request
 
 from app.server.services import ThreadService
 from app.server.discovery import kasa_encrypt, kasa_decrypt
+from app.home3d.inverter import is_role
 
 try:
     import tinytuya
@@ -227,12 +232,13 @@ class PlugService(ThreadService):
     default_enabled = True
     settings_schema = [("poll_s", "Read plugs every (seconds)", "int", POLL_S, "")]
 
-    def __init__(self, book, apply, driver_factory=make_driver):
-        """book: SmartDeviceBook. apply(item_id, on, watts) runs on any thread and must hand
-        the reading to the GUI thread itself."""
+    def __init__(self, book, apply, driver_factory=make_driver, on_role=None):
+        """book: SmartDeviceBook. apply(item_id, on, watts) and on_role(role, reading, error) run on
+        any thread and must hand the reading to the GUI thread themselves."""
         super().__init__()
         self.book = book
         self.apply = apply
+        self.on_role = on_role
         self.driver_factory = driver_factory
         self.readings = {}         # dev_id -> {"reading": dict, "ts": t, "error": str|None}
         self.commands = queue.Queue()
@@ -252,6 +258,8 @@ class PlugService(ThreadService):
 
     def request(self, item_id, on):
         """An appliance was switched in the app: switch its plug (if it has a controllable one)."""
+        if is_role(item_id):
+            return False                          # inverter plugs are only read, never switched
         dev_id = self.book.by_item(item_id)
         if dev_id and can_control(self.book.devices[dev_id])[0]:
             self.commands.put((dev_id, bool(on)))
@@ -275,7 +283,7 @@ class PlugService(ThreadService):
 
     def _switch(self, dev_id, on):
         dev = self.book.devices.get(dev_id)
-        if not dev:
+        if not dev or is_role(dev.get("linked_item")):
             return
         try:
             self.driver(dev_id, dev).set_on(on)
@@ -299,10 +307,14 @@ class PlugService(ThreadService):
                 self.log(f"{self.book.label(dev_id)} not answering: {e}", "warn")
             self.readings[dev_id] = {**prev, "error": str(e)}
             self._drivers.pop(dev_id, None)
+            self._tell_role(dev, None, str(e))
             return None
         if prev.get("error"):
             self.log(f"{self.book.label(dev_id)} answering again")
         self.readings[dev_id] = {"reading": r, "ts": time.time(), "error": None}
+        if is_role(dev.get("linked_item")):
+            self._tell_role(dev, r, None)
+            return r
         watts = r["power_w"]
         if watts is None and r["on"] is False:
             watts = 0.0
@@ -311,6 +323,15 @@ class PlugService(ThreadService):
         except Exception as e:
             self.log(f"Couldn't update the appliance: {e}", "warn")
         return r
+
+    def _tell_role(self, dev, reading, error):
+        role = dev.get("linked_item")
+        if not is_role(role) or self.on_role is None:
+            return
+        try:
+            self.on_role(role, reading, error)
+        except Exception as e:
+            self.log(f"Couldn't update the inverter reading: {e}", "warn")
 
     def info(self):
         linked = self.linked()

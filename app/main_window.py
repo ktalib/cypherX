@@ -425,8 +425,16 @@ class MainWindow(QMainWindow):
         self.view_smart_home.smart_book = self.discovery.book
 
         # Smart plugs follow the appliances, and report real state + watts back
+        # Two plugs can measure the inverter itself: grid side (power cuts, charging) and house side (load)
+        from app.home3d.inverter import InverterMeter, ROLES as INVERTER_ROLES
+        book = self.discovery.book
+        self.inverter = InverterMeter(lambda: {d.get("linked_item") for d in list(book.devices.values())}
+                                      & set(INVERTER_ROLES))
+        self.view_smart_home.inverter = self.inverter
+        self.view_smart_home.model.measured_load = self.inverter.load_w
         self.plugs = self.services.register(PlugService(
-            self.discovery.book, lambda item, on, w: self.bridge.post(lambda: self._apply_plug(item, on, w))))
+            self.discovery.book, lambda item, on, w: self.bridge.post(lambda: self._apply_plug(item, on, w)),
+            on_role=lambda role, r, err: self.bridge.post(lambda: self._apply_inverter(role, r, err))))
         self.view_smart_home.model.switch_hook = lambda item, on: self.plugs.request(item, on)
         self.backup_service = self.services.register(
             BackupService(bus, extra_actions=[("Restore from a backup…", self._restore_backup)]))
@@ -470,6 +478,14 @@ class MainWindow(QMainWindow):
         changed = home.model.apply_reading(item_id, on, watts)
         moved = watts is not None and (before is None or abs(before - watts) >= 3)
         if changed or moved:
+            home.refresh()
+
+    def _apply_inverter(self, role, reading, error):
+        home = self.view_smart_home
+        before = (self.inverter.grid_on(), round((self.inverter.load_w() or 0) / 5))
+        self.inverter.update(role, reading, error)
+        home._poll_grid()                         # a power cut shows up straight away, not at the next poll
+        if (self.inverter.grid_on(), round((self.inverter.load_w() or 0) / 5)) != before:
             home.refresh()
 
     def _watchdog(self):

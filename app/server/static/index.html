@@ -609,6 +609,7 @@ function renderChrome(s) {
   if (g.off_since) chips.push(["bad", "Grid off · " + hours((Date.now() / 1000 - g.off_since) / 3600)]);
   else chips.push([g.watching ? "good" : "", g.watching ? "Grid on" : "Grid not watched"]);
   chips.push([p.battery_pct < 20 ? "bad" : p.battery_pct < 40 ? "warn" : "good", "Battery " + Math.round(p.battery_pct) + "%"]);
+  if (p.charging_w > 5) chips.push(["good", "Charging " + Math.round(p.charging_w) + " W"]);
   if (m.days_left != null) chips.push([m.days_left < 2 ? "warn" : "", "Meter " + hours(m.days_left * 24)]);
   chips.push([sec.armed ? "good" : "", sec.armed ? "Armed" : "Disarmed"]);
   if (sec.motion_today) chips.push(["warn", sec.motion_today + " motion today"]);
@@ -622,7 +623,8 @@ function renderHome(s) {
   const ring = $("ringVal"); ring.style.strokeDashoffset = 326.7 * (1 - frac);
   ring.style.stroke = frac > .9 ? "var(--bad)" : frac > .7 ? "var(--warn)" : "var(--accent)";
   $("loadW").textContent = watts(p.load_w);
-  $("loadPct").textContent = Math.round(frac * 100) + "% of " + (p.inverter_w / 1000).toFixed(1).replace(".0", "") + " kW";
+  $("loadPct").textContent = (p.measured ? "measured · " : "") + Math.round(frac * 100) + "% of "
+    + (p.inverter_w / 1000).toFixed(1).replace(".0", "") + " kW";
   $("perHour").textContent = money(p.per_hour) + " / h";
   $("battery").textContent = Math.round(p.battery_pct) + "%" + (p.runtime_h ? " · " + hours(p.runtime_h) : "");
   $("perDay").textContent = money(p.per_day);

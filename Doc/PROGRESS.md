@@ -21,7 +21,7 @@ home's power system, cameras and (soon) smart plugs.
 | Inverter data | Waiting — check the back panel for a data port |
 | Tested on the Windows laptop | **Not yet** — everything so far was tested on a Linux cloud machine |
 
-**Codebase:** about 27,900 lines (Python / PySide6 + one HTML page for phones), 94 unit tests (93 pass — see §5).
+**Codebase:** about 27,900 lines (Python / PySide6 + one HTML page for phones), 99 unit tests (98 pass — see §5).
 
 ---
 
@@ -39,7 +39,8 @@ home's power system, cameras and (soon) smart plugs.
 | 8 | 19 Oct | _same branch, not opened yet_ | **Smart plug control** — linked plugs switch for real from the app, 3D view, web dashboard and Telegram; live watts / volts read every 5 s replace the estimates; Tuya local keys by paste or **Import Tuya keys** from the Tuya cloud (once); drivers for Tuya (tinytuya), Shelly gen 1/2, Tasmota, TP-Link Kasa |
 | 9 | 19 Oct | [#7](https://github.com/ktalib/cypherX/pull/7) | **Phone dashboard redesign** — app-style web dashboard: bottom tab bar (side rail on tablets / PCs), power ring, quick actions, room cards, device tiles with switches and live watts, bottom sheet for meter readings / tokens, light & dark themes, offline banner, add-to-home-screen icon |
 | 10 | 19 Oct | [#8](https://github.com/ktalib/cypherX/pull/8) | **Phone as a CCTV camera** — *Add camera → Phone camera app* (IP Webcam / DroidCam: just the phone's IP); or no app at all: the dashboard also runs on a secure port (self-made HTTPS certificate) where *Security → Use this phone as a camera* streams pictures into CCTV with motion detection and alerts |
-| 11 | 19 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Fridge stock** — counts for a fridge that isn't smart: bought groceries add stock, AI photo checks correct it (Gemini, OpenRouter, Groq, Ollama — free; Claude, OpenAI — paid; backup provider), usage rates, "runs out in", low alerts onto the shopping list; on the desktop, phone dashboard (Fridge tab) and Telegram (send a photo, /fridge, /took, /add); optional ESP32-S3 fridge camera service + firmware |
+| 11 | 19 Oct | [#9](https://github.com/ktalib/cypherX/pull/9) | **Fridge stock** — counts for a fridge that isn't smart: bought groceries add stock, AI photo checks correct it (Gemini, OpenRouter, Groq, Ollama — free; Claude, OpenAI — paid; backup provider), usage rates, "runs out in", low alerts onto the shopping list; on the desktop, phone dashboard (Fridge tab) and Telegram (send a photo, /fridge, /took, /add); optional ESP32-S3 fridge camera service + firmware |
+| 12 | 22 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Inverter measured with two smart plugs** — grid side (power cuts without the laptop charger, charging watts) and house side (real load used for runtime and % of inverter); never switched; [hardware guide and shopping list](HARDWARE.md) |
 
 ---
 
@@ -88,11 +89,11 @@ start automatically, settings, actions and its own log. A **watchdog** restarts 
 
 | Device | Can the app read it? | Plan |
 |---|---|---|
-| Tuya 20A smart plugs (being bought) | **Discovery + control built** — found from their Wi-Fi broadcasts; switched and read locally once each plug's key is imported | When they arrive: pair in Smart Life → Start discovery → Import Tuya keys → link to appliances → check real watts |
+| Smart plugs with energy monitoring (7 to buy — see [HARDWARE.md](HARDWARE.md)) | **Discovery + control built** — found from their Wi-Fi broadcasts; switched and read locally once each plug's key is imported | When they arrive: pair in Smart Life → Start discovery → Import Tuya keys → link to appliances → check real watts |
 | Ikeja Electric prepaid meter (split meter) | No data port | Manual tracker built (tokens + readings). Optional: Tuya clamp meter fitted by an electrician after the meter |
-| Solar charge controller (PWM) | Probably no data port | Manual battery readings built. Optional: Bluetooth battery monitor (shunt) |
-| Invertek Mega+ inverter | Unknown | **Open question:** check the back panel for a USB / RS232 / RJ45 "COM" port |
-| Laptop charger | Yes — used for power-cut detection | Needs testing on the laptop (charger in a grid-only socket) |
+| 60A PWM solar charge controller | No data port (USB sockets are 5V power only) | Manual battery readings. Later: a battery monitor with a shunt |
+| Invertek Mega+ 1500VA/12V inverter | No port on the front | **Two smart plugs (IN / OUT) built** — grid, load, charging. Still to check: back/sides for a COM / RS232 / USB port |
+| Laptop charger | Yes — power-cut detection (fallback when there's no inverter IN plug) | Needs testing on the laptop (charger in a grid-only socket) |
 | PC webcam | Yes | Used for the CCTV demo; real cameras should support RTSP/ONVIF |
 | ESP32-S3 N16R8 CAM (fridge) | Optional, not bought yet | Firmware ready in `firmware/fridge_cam` (untested on hardware) |
 | Phones | Yes — as cameras | Via IP Webcam / DroidCam, or the dashboard's secure page (no app); needs testing with a real phone |
@@ -101,8 +102,8 @@ start automatically, settings, actions and its own log. A **watchdog** restarts 
 
 ## 5. Testing
 
-- **Unit tests:** 94 (fridge + AI providers 15, energy log 9, smart device discovery 9, plug control 8, CCTV 9, network watch + backups 7,
-  accounts/bills/groceries 6, service manager 6, Telegram 6, server checks 5, web dashboard 8, original 6). 93 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
+- **Unit tests:** 99 (fridge + AI providers 15, inverter plugs 5, energy log 9, smart device discovery 9, plug control 8, CCTV 9, network watch + backups 7,
+  accounts/bills/groceries 6, service manager 6, Telegram 6, server checks 5, web dashboard 8, original 6). 98 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
   tests run on Linux (`C:\Windows` isn't an absolute path there).
 - **App checks:** each feature was run headless on a Linux cloud machine with sample data and screenshotted —
   layouts, navigation between Home and Server, sign-in, roles, lock, motion detection with synthetic frames.

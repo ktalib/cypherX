@@ -119,6 +119,8 @@ class HomeModel:
         # plug can follow (set by the main window)
         self.switch_hook = None
         self.live = {}             # item_id -> (watts measured by its smart plug, timestamp)
+        # optional callable → the whole house's watts measured at the inverter (None when not measured)
+        self.measured_load = None
 
     # ------------------------------------------------------------ storage --
 
@@ -187,6 +189,10 @@ class HomeModel:
         return d["device"]["watts"] if d["device"]["on"] else 0
 
     def load_w(self, room_id=None):
+        if room_id is None and self.measured_load is not None:
+            m = self.measured_load()             # the whole house, measured at the inverter output
+            if m is not None:
+                return m
         return sum(self.device_w(d) for d in self.devices(room_id))
 
     def daily_kwh(self):

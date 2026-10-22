@@ -453,8 +453,11 @@ class SmartHomeView(QWidget):
         color = "#ff5d6c" if frac > 0.9 else "#ffb547" if frac > 0.7 else "#38bdf8"
         self.load_bar.setStyleSheet(f"QProgressBar::chunk{{background:{color};border-radius:4px;}}")
         on = [d for d in m.devices() if d["device"]["on"]]
-        self.load_sub.setText(f"{len(on)} of {len(m.devices())} appliances running  ·  "
-                              f"{frac * 100:.0f}% of the {cap:,} W inverter")
+        inv = getattr(self, "inverter", None)
+        measured = inv is not None and inv.load_w() is not None
+        self.load_sub.setText(("Measured at the inverter  ·  " if measured else
+                               f"{len(on)} of {len(m.devices())} appliances running  ·  ")
+                              + f"{frac * 100:.0f}% of the {cap:,} W inverter")
         kwh = m.daily_kwh()
         cur = pw.get("currency", "₦")
         cost = kwh * pw.get("tariff", 0)
@@ -584,7 +587,7 @@ class SmartHomeView(QWidget):
             self.grid_big.setStyleSheet(_BIG.replace("#ffffff", "#ff5d6c"))
             self.grid_info.setText(f"Off for {_fmt_hours((now - out['start']) / 3600)}  "
                                    f"(since {_when(out['start'])})")
-        elif e.grid_detect:
+        elif self.grid_watching():
             self.grid_big.setText("Grid ON")
             self.grid_big.setStyleSheet(_BIG.replace("#ffffff", "#10b981"))
             self.grid_info.setText("Watching the laptop charger.")
@@ -592,7 +595,12 @@ class SmartHomeView(QWidget):
             self.grid_big.setText("Not watching")
             self.grid_big.setStyleSheet(_BIG)
             self.grid_info.setText("Tick the box below to log power cuts automatically.")
-        if e.grid_detect and read_grid_from_charger() is None:
+        inv = getattr(self, "inverter", None)
+        if inv is not None and inv.configured:
+            extra = [ln for ln in inv.summary(now)[1:]]
+            self.grid_info.setText(("Off for " + _fmt_hours((now - out["start"]) / 3600) + "  ·  " if out else
+                                    "Watching the inverter input plug.  ") + "  ·  ".join(extra))
+        elif e.grid_detect and read_grid_from_charger() is None:
             self.grid_info.setText("This PC has no battery sensor, so it can't see the charger. "
                                    "Power cuts can't be detected here.")
         stats = [f"No grid: {_fmt_hours(e.outage_hours(now - 86400, now))} in 24 h, "
@@ -717,12 +725,20 @@ class SmartHomeView(QWidget):
         self._poll_grid()
         self.refresh_energy()
 
+    def grid_watching(self):
+        """Is anything watching the grid: the inverter input plug or the laptop charger?"""
+        inv = getattr(self, "inverter", None)
+        return bool(inv is not None and inv.configured) or self.energy.grid_detect
+
     def _poll_grid(self):
-        if not self.energy.grid_detect:
-            return
-        grid = read_grid_from_charger()
+        inv = getattr(self, "inverter", None)          # InverterMeter, set by the main window
+        grid, how = (inv.grid_on(), "the inverter input plug") if inv is not None and inv.configured else (None, "")
         if grid is None:
-            return
+            if not self.energy.grid_detect:
+                return
+            grid, how = read_grid_from_charger(), "the laptop charger"
+            if grid is None:
+                return
         change = self.energy.grid_changed(grid)
         if change is None:
             if self.energy.open_outage():
@@ -730,7 +746,7 @@ class SmartHomeView(QWidget):
             return
         pw = self.model.power
         if change == "off":
-            self._log("Power cut: grid went off (laptop charger lost power)")
+            self._log(f"Power cut: grid went off ({how} lost power)")
             self._notify("Power cut", "Grid is off — running on the inverter.")
             rt = self.model.runtime_hours()
             bus.publish("power", "Power cut", "Grid is off — running on the inverter."
