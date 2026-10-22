@@ -37,6 +37,11 @@ CYPHER-X is a modern, macOS / iOS Sonoma-inspired desktop operations hub and wid
 - **Battery readings**: log the charge % and / or voltage shown on the inverter or charge controller; the % updates the runtime estimate.
 - **Power-cut logging**: plug the laptop charger into a socket that is *not* on the inverter and tick "Detect power cuts". When the charger loses power CypherX logs an outage, notifies you and switches the power source to the inverter; hours without grid are totalled per day and week.
 - All entries are in the Energy log (with delete for typos) and stored in `smart_home_energy.json`, separate from the 3D layout.
+- **Inverter measured with two smart plugs**: one between the wall and the inverter's mains input, one between the
+  inverter's output and the extension board (Smart Devices → "Plugged in" → ⚡ Inverter input / output). CYPHER-X
+  then sees power cuts by itself (the input plug goes quiet while the output plug runs on the battery), the real
+  house load, and roughly how much goes into charging. It never switches these two plugs.
+- What to buy and how to fit it: [Doc/HARDWARE.md](Doc/HARDWARE.md).
 
 ## Sign-in, roles and the sidebar
 
@@ -107,10 +112,25 @@ themselves — press **Start discovery**:
 
 ## Home Dashboard
 
-- One page for the whole smart home: a greeting with the home's status and quick actions (All off, Arm / Disarm, Bought token, 3D map).
-- Tiles for live load against the inverter, battery charge and runtime, prepaid meter days left, and energy cost (now vs a usual hour, per day and month).
-- Tap an appliance tile to switch it (same model as the 3D Smart Home page), load by room (click a room to fly the 3D map there), the last 24 h of grid supply with power cuts, meter units over two weeks, and a security card with the latest motion snapshot.
-- The layout adapts to the window width: four columns, two columns or one.
+- **Look:** the Smart Home pages and the Apps next to them share a warm graphite look with one orange accent
+  (Server keeps its green console). The PC telemetry panel only shows in the Server console, so home pages use the full width.
+- **Hero:** your real 3D house, with live load, battery and grid floating over it, plus the weather and today's
+  **solar outlook**. Click an appliance in the house to switch it.
+- **Rooms panel:** pick a room to fly the house there and switch its appliances with toggles.
+- **Cards:**
+  - **Power** dial (load against the inverter, battery, runtime, cost per hour)
+  - **Camera** (live picture or the last motion, with snapshot / arm / open / start-stop)
+  - **Power cuts this week** (hours without grid per day)
+  - **Prepaid meter** trend
+  - **Fridge** (what runs out first)
+  - **Energy cost** by room
+- The layout adapts: three columns, two, or one.
+- **Weather** comes from Open-Meteo (free, no key) for the place set on the Widget Screen weather card, or the one
+  pinned in Server → Services → Weather. Without internet the cards simply hide it.
+- **Phone dashboard:** the same design.
+  - Weather and solar card, power dial, round quick actions, power cuts this week.
+  - Live camera card with controls, room chips with toggle tiles.
+  - A light / dark button (or follow the phone).
 
 ## CCTV
 

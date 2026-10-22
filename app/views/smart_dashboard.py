@@ -1,39 +1,33 @@
 """
-Home Dashboard — one glance at the whole smart home.
+Home Dashboard — the whole smart home on one page.
 
-  • hero: greeting, clock, a one-line status of the home and quick actions
-  • tiles: live load against the inverter, battery, prepaid meter, energy cost
-  • appliances: tap a tile to switch it (same model as the 3D Smart Home page)
-  • load by room, grid supply over the last 24 h, meter units over two weeks
-  • security: armed state, live cameras, motion today and the latest snapshot
+  • header: greeting, time, status pills and quick actions
+  • hero: the real 3D house with live figures floating over it (load, battery, grid,
+    weather) next to a room panel — pick a room to fly the house there and switch its
+    appliances with toggles
+  • power dial (load against the inverter), the live camera, power cuts this week
+  • prepaid meter trend, what's in the fridge, energy cost by room
 
-Nothing is stored here: the page reads the Smart Home model / energy log and the
-CCTV store through those pages, so a switch flipped here shows up there too.
+Nothing is stored here: the page reads the Smart Home model / energy log, the CCTV
+store and the fridge through their pages, so a switch flipped here shows up there too.
 """
 import time
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer, QRectF, QPointF, Signal, QSize
-from PySide6.QtGui import QPainter, QColor, QPen, QFont, QFontMetrics, QPainterPath, QLinearGradient, QPixmap
+from PySide6.QtGui import (QPainter, QColor, QPen, QFont, QFontMetrics, QPainterPath, QLinearGradient, QPixmap,
+                           QRegion, QImage)
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QFrame,
-    QScrollArea, QSizePolicy, QToolTip
+    QScrollArea, QSizePolicy, QToolTip, QButtonGroup
 )
 
 from app.icons import get_icon, get_pixmap
-
-ACCENT = "#38bdf8"
-GOOD = "#10b981"
-WARN = "#f59e0b"
-CRIT = "#f43f5e"
-TEXT = "#f8fafc"
-SOFT = "#cbd5e1"
-MUTED = "#94a3b8"
-DIM = "#64748b"
-TRACK = QColor(255, 255, 255, 22)
+from app.views.home_ui import (ACCENT, ACCENT_HI, ON_ACCENT, GOOD, WARN, CRIT, TEXT, SOFT, MUTED, DIM, TRACK,
+                               GLASS, Toggle, ArcDial, WeekBars, Clickable, pill_style, glass_style, rgba,
+                               apply_home_style)
 
 REFRESH_MS = 2000
-
 DEVICE_ICONS = {"tv_wall": "tv", "fan": "fan", "ceiling_light": "lightbulb", "fridge": "fridge"}
 
 
@@ -57,45 +51,81 @@ def _money(cur, v):
     return f"{cur}{v:,.0f}"
 
 
+def _bubble(icon, size=30, color=SOFT, bg="rgba(255,255,255,0.06)"):
+    ic = QLabel()
+    ic.setFixedSize(size, size)
+    ic.setAlignment(Qt.AlignCenter)
+    ic.setPixmap(get_pixmap(icon, color, int(size * 0.5)))
+    ic.setStyleSheet(f"background:{bg};border-radius:{size // 2}px;border:none;")
+    return ic
+
+
 def _card(title, icon):
     box = QFrame()
     box.setObjectName("panel")
     lo = QVBoxLayout(box)
-    lo.setContentsMargins(16, 14, 16, 14)
-    lo.setSpacing(10)
+    lo.setContentsMargins(18, 16, 18, 16)
+    lo.setSpacing(12)
     head = QHBoxLayout()
-    head.setSpacing(7)
-    ic = QLabel()
-    ic.setPixmap(get_pixmap(icon, MUTED, 13))
-    ic.setStyleSheet("background:transparent;border:none;")
-    head.addWidget(ic)
-    head.addWidget(_lbl(title.upper(), MUTED, 10, 700, 1.2))
+    head.setSpacing(10)
+    head.addWidget(_bubble(icon))
+    head.addWidget(_lbl(title, TEXT, 14, 600))
     head.addStretch()
     lo.addLayout(head)
     return box, lo, head
 
 
 def _chip_style(color):
-    c = QColor(color)
-    return (f"QLabel{{color:{TEXT};background:rgba({c.red()},{c.green()},{c.blue()},0.16);"
-            f"border:1px solid rgba({c.red()},{c.green()},{c.blue()},0.45);border-radius:11px;"
-            f"padding:3px 10px;font-size:11px;font-weight:700;}}")
+    return pill_style(color)
 
 
 def _action(text, icon, slot, primary=False):
     b = QPushButton(f" {text}")
-    b.setIcon(get_icon(icon, "#04131d" if primary else "#e2e8f0", 13))
+    b.setIcon(get_icon(icon, ON_ACCENT if primary else "#e7e5e4", 13))
     b.setCursor(Qt.PointingHandCursor)
-    b.setMinimumHeight(30)
+    b.setMinimumHeight(32)
     if primary:
-        b.setStyleSheet(f"QPushButton{{background:{ACCENT};color:#04131d;border:none;border-radius:15px;"
-                        f"padding:4px 14px;font-weight:700;}}QPushButton:hover{{background:#7dd3fc;}}")
+        b.setStyleSheet(f"QPushButton{{background:{ACCENT};color:{ON_ACCENT};border:none;border-radius:16px;"
+                        f"padding:4px 15px;font-weight:700;}}QPushButton:hover{{background:{ACCENT_HI};}}"
+                        f"QPushButton:disabled{{background:rgba(255,122,26,0.4);}}")
     else:
-        b.setStyleSheet("QPushButton{background:rgba(255,255,255,0.07);color:#e2e8f0;"
-                        "border:1px solid rgba(255,255,255,0.14);border-radius:15px;padding:4px 14px;"
-                        "font-weight:600;}QPushButton:hover{background:rgba(255,255,255,0.14);}")
+        b.setStyleSheet("QPushButton{background:rgba(255,255,255,0.06);color:#e7e5e4;"
+                        "border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:4px 15px;"
+                        "font-weight:600;}QPushButton:hover{background:rgba(255,255,255,0.12);}"
+                        "QPushButton:disabled{color:#78716c;}")
     b.clicked.connect(slot)
     return b
+
+
+def _round_btn(icon, tip, slot, danger=False, size=38):
+    b = QPushButton()
+    b.setFixedSize(size, size)
+    b.setIcon(get_icon(icon, "#ffffff" if danger else "#e7e5e4", 16))
+    b.setToolTip(tip)
+    b.setCursor(Qt.PointingHandCursor)
+    bg = CRIT if danger else "rgba(255,255,255,0.08)"
+    b.setStyleSheet(f"QPushButton{{background:{bg};border:1px solid rgba(255,255,255,0.10);"
+                    f"border-radius:{size // 2}px;}}QPushButton:hover{{background:"
+                    f"{'#fb9191' if danger else 'rgba(255,255,255,0.16)'};}}")
+    b.clicked.connect(slot)
+    return b
+
+
+def rounded_pixmap(src, w, h, radius=16):
+    """Fill w×h with the picture (cropped, centred) and round the corners."""
+    out = QPixmap(max(1, w), max(1, h))
+    out.fill(Qt.transparent)
+    if src.isNull():
+        return out
+    scaled = src.scaled(w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    p = QPainter(out)
+    p.setRenderHint(QPainter.Antialiasing)
+    path = QPainterPath()
+    path.addRoundedRect(QRectF(0, 0, w, h), radius, radius)
+    p.setClipPath(path)
+    p.drawPixmap(int((w - scaled.width()) / 2), int((h - scaled.height()) / 2), scaled)
+    p.end()
+    return out
 
 
 # --------------------------------------------------------------- painted parts --
@@ -206,82 +236,6 @@ class RoomBars(QWidget):
         p.end()
 
 
-class GridStrip(QWidget):
-    """The last 24 hours of grid supply: on (green) vs power cut (red)."""
-
-    SPAN = 24 * 3600
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.outages, self.watching, self.now = [], False, time.time()
-        self.setMinimumHeight(58)
-        self.setMouseTracking(True)
-
-    def set_data(self, outages, watching):
-        self.outages, self.watching, self.now = outages, watching, time.time()
-        self.update()
-
-    def _bar(self):
-        return QRectF(0, 6, self.width(), 22)
-
-    def _segments(self):
-        start = self.now - self.SPAN
-        segs = []
-        for o in self.outages:
-            s, e = o["start"], o.get("end") or self.now
-            if e > start:
-                segs.append((max(s, start), e, o))
-        return segs
-
-    def mouseMoveEvent(self, e):
-        bar = self._bar()
-        x = e.position().x()
-        t = self.now - self.SPAN + (x - bar.x()) / max(1, bar.width()) * self.SPAN
-        for s, end, o in self._segments():
-            if s <= t <= end:
-                done = o.get("end")
-                QToolTip.showText(e.globalPosition().toPoint(),
-                                  f"Power cut  {datetime.fromtimestamp(o['start']):%a %H:%M} – "
-                                  f"{datetime.fromtimestamp(done):%H:%M}" if done else
-                                  f"Power cut since {datetime.fromtimestamp(o['start']):%a %H:%M} (still off)",
-                                  self)
-                return
-        QToolTip.showText(e.globalPosition().toPoint(),
-                          f"{datetime.fromtimestamp(t):%a %H:%M}  —  "
-                          + ("grid on" if self.watching else "not watching"), self)
-
-    def paintEvent(self, _):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        bar = self._bar()
-        p.setPen(Qt.NoPen)
-        base = QColor(GOOD)
-        base.setAlpha(150)
-        p.setBrush(base if self.watching else TRACK)
-        p.drawRoundedRect(bar, 6, 6)
-        start = self.now - self.SPAN
-        p.setBrush(QColor(CRIT))
-        for s, e, _ in self._segments():
-            x0 = bar.x() + (s - start) / self.SPAN * bar.width()
-            x1 = bar.x() + (e - start) / self.SPAN * bar.width()
-            seg = QRectF(x0, bar.y(), max(3.0, x1 - x0), bar.height())
-            p.drawRoundedRect(seg.adjusted(1, 0, -1, 0) if seg.width() > 4 else seg, 4, 4)
-        # hour ticks every 6 h, right edge = now
-        f = QFont()
-        f.setPixelSize(10)
-        p.setFont(f)
-        for k in range(0, 5):
-            t = start + k * 6 * 3600
-            x = bar.x() + k / 4 * bar.width()
-            p.setPen(QPen(QColor(255, 255, 255, 40), 1))
-            p.drawLine(QPointF(x, bar.bottom() + 3), QPointF(x, bar.bottom() + 7))
-            p.setPen(QColor(DIM))
-            text = "now" if k == 4 else f"{datetime.fromtimestamp(t):%H:%M}"
-            align = Qt.AlignLeft if k == 0 else Qt.AlignRight if k == 4 else Qt.AlignHCenter
-            rx = x if k == 0 else x - 60 if k == 4 else x - 30
-            p.drawText(QRectF(rx, bar.bottom() + 8, 60, 16), align | Qt.AlignTop, text)
-        p.end()
-
 
 class Sparkline(QWidget):
     """Meter units left over time (one series), hover for each reading."""
@@ -371,7 +325,7 @@ class Sparkline(QWidget):
         p.fillPath(fill, g)
         p.setPen(QPen(QColor(ACCENT), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         p.drawPath(line)
-        surface = QColor("#121a22")
+        surface = QColor("#1c1a19")
         for i, q in enumerate(pts):
             big = i == self.hover or i == len(pts) - 1
             p.setPen(QPen(surface, 2))
@@ -396,68 +350,6 @@ class Sparkline(QWidget):
                    f"{self.points[-1][1]:,.1f} kWh")
         p.end()
 
-
-class ApplianceTile(QFrame):
-    """Tap to switch. Glows when the appliance is on."""
-
-    clicked = Signal(str)
-
-    def __init__(self, item_id, parent=None):
-        super().__init__(parent)
-        self.item_id = item_id
-        self.setObjectName(f"app_{item_id}")
-        self.setCursor(Qt.PointingHandCursor)
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setMinimumHeight(86)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        lo = QVBoxLayout(self)
-        lo.setContentsMargins(12, 10, 12, 10)
-        lo.setSpacing(4)
-        top = QHBoxLayout()
-        self.icon = QLabel()
-        self.icon.setFixedSize(30, 30)
-        self.icon.setAlignment(Qt.AlignCenter)
-        self.state = _lbl("", MUTED, 10, 800, 0.8)
-        top.addWidget(self.icon)
-        top.addStretch()
-        top.addWidget(self.state)
-        lo.addLayout(top)
-        self.name = _lbl("", TEXT, 12, 700)
-        self.sub = _lbl("", MUTED, 10, 500)
-        lo.addWidget(self.name)
-        lo.addWidget(self.sub)
-        self._sig = None
-
-    def mouseReleaseEvent(self, e):
-        if e.button() == Qt.LeftButton and self.rect().contains(e.position().toPoint()):
-            self.clicked.emit(self.item_id)
-
-    def set_item(self, it, room_name, live=None):
-        dev = it["device"]
-        sig = (it["name"], room_name, dev["watts"], dev["on"], None if live is None else round(live))
-        if sig == self._sig:
-            return
-        self._sig = sig
-        on = dev["on"]
-        icon = DEVICE_ICONS.get(it.get("kind"), "plug")
-        self.icon.setPixmap(get_pixmap(icon, "#04140d" if on else SOFT, 16))
-        self.icon.setStyleSheet(f"background:{GOOD if on else 'rgba(255,255,255,0.08)'};border-radius:15px;")
-        self.state.setText("ON" if on else "OFF")
-        self.state.setStyleSheet(f"color:{GOOD if on else DIM};font-size:10px;font-weight:800;"
-                                 "letter-spacing:0.8px;background:transparent;border:none;")
-        self.name.setText(it["name"])
-        self.sub.setText(f"{room_name}  ·  {live:.0f} W live" if live is not None else f"{room_name}  ·  {dev['watts']:g} W")
-        n = self.objectName()
-        if on:
-            self.setStyleSheet(f"QFrame#{n}{{background:rgba(16,185,129,0.13);border:1px solid "
-                               f"rgba(16,185,129,0.55);border-radius:14px;}}"
-                               f"QFrame#{n}:hover{{background:rgba(16,185,129,0.20);}}")
-        else:
-            self.setStyleSheet(f"QFrame#{n}{{background:rgba(255,255,255,0.04);border:1px solid "
-                               f"rgba(255,255,255,0.10);border-radius:14px;}}"
-                               f"QFrame#{n}:hover{{background:rgba(255,255,255,0.09);"
-                               f"border:1px solid rgba(255,255,255,0.20);}}")
-        self.setToolTip(f"Switch {it['name']} {'off' if on else 'on'}")
 
 
 class FitLabel(QLabel):
@@ -488,6 +380,7 @@ class FitLabel(QLabel):
         p.end()
 
 
+
 class StatTile(QFrame):
     """KPI tile: ring on the left, headline + detail on the right."""
 
@@ -495,15 +388,12 @@ class StatTile(QFrame):
         super().__init__(parent)
         self.setObjectName("panel")
         lo = QVBoxLayout(self)
-        lo.setContentsMargins(16, 14, 16, 14)
-        lo.setSpacing(8)
+        lo.setContentsMargins(18, 16, 18, 16)
+        lo.setSpacing(10)
         head = QHBoxLayout()
-        head.setSpacing(7)
-        ic = QLabel()
-        ic.setPixmap(get_pixmap(icon, MUTED, 13))
-        ic.setStyleSheet("background:transparent;border:none;")
-        head.addWidget(ic)
-        head.addWidget(_lbl(title.upper(), MUTED, 10, 700, 1.2))
+        head.setSpacing(10)
+        head.addWidget(_bubble(icon))
+        head.addWidget(_lbl(title, TEXT, 13, 600))
         head.addStretch()
         self.chip = QLabel()
         self.chip.hide()
@@ -517,7 +407,7 @@ class StatTile(QFrame):
         col = QVBoxLayout()
         col.setSpacing(2)
         col.addStretch()
-        self.value = FitLabel("", TEXT, 24, 300)
+        self.value = FitLabel("", TEXT, 26, 300)
         self.detail = _lbl("", SOFT, 11, 600)
         self.detail.setWordWrap(True)
         self.sub = _lbl("", MUTED, 10, 500)
@@ -538,6 +428,109 @@ class StatTile(QFrame):
         self.chip.show()
 
 
+
+# ---------------------------------------------------------------- page parts --
+
+class DeviceRow(QFrame):
+    """An appliance in the room panel: icon, name, watts and a switch."""
+    switched = Signal(str, bool)
+
+    def __init__(self, item_id, parent=None):
+        super().__init__(parent)
+        self.item_id = item_id
+        self.setObjectName(f"row_{item_id}")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        lo = QHBoxLayout(self)
+        lo.setContentsMargins(10, 8, 12, 8)
+        lo.setSpacing(12)
+        self.icon = QLabel()
+        self.icon.setFixedSize(38, 38)
+        self.icon.setAlignment(Qt.AlignCenter)
+        lo.addWidget(self.icon)
+        col = QVBoxLayout()
+        col.setSpacing(1)
+        self.name = _lbl("", TEXT, 13, 600)
+        self.sub = _lbl("", MUTED, 11, 500)
+        col.addWidget(self.name)
+        col.addWidget(self.sub)
+        lo.addLayout(col, 1)
+        self.toggle = Toggle()
+        self.toggle.toggled.connect(lambda on: self.switched.emit(self.item_id, on))
+        lo.addWidget(self.toggle)
+        self._sig = None
+
+    def set_item(self, it, room_name, live=None):
+        dev = it["device"]
+        sig = (it["name"], room_name, dev["watts"], dev["on"], None if live is None else round(live))
+        if sig == self._sig:
+            return
+        self._sig = sig
+        on = dev["on"]
+        icon = DEVICE_ICONS.get(it.get("kind"), "plug")
+        self.icon.setPixmap(get_pixmap(icon, ON_ACCENT if on else SOFT, 18))
+        self.icon.setStyleSheet(f"background:{ACCENT if on else 'rgba(255,255,255,0.06)'};border-radius:19px;")
+        self.name.setText(it["name"])
+        watts = f"{live:.0f} W live" if live is not None else f"{dev['watts']:g} W"
+        self.sub.setText(f"{room_name}  ·  {watts}" if room_name else watts)
+        self.toggle.set_on(on)
+        n = self.objectName()
+        self.setStyleSheet(f"QFrame#{n}{{background:{rgba(ACCENT, 0.08) if on else 'rgba(255,255,255,0.03)'};"
+                           f"border-radius:18px;border:1px solid {rgba(ACCENT, 0.22) if on else 'transparent'};}}"
+                           f"QFrame#{n}:hover{{background:rgba(255,255,255,0.07);}}")
+
+
+class HeroHouse(QWidget):
+    """The 3D house with rounded corners (masked) for the dashboard hero."""
+
+    def __init__(self, model, radius=24, parent=None):
+        super().__init__(parent)
+        from app.home3d.view3d import House3DView
+        self.radius = radius
+        lo = QVBoxLayout(self)
+        lo.setContentsMargins(0, 0, 0, 0)
+        self.view = House3DView(model)
+        self.view.setMinimumSize(320, 300)
+        self.view.use_warm_theme()
+        lo.addWidget(self.view)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, self.width(), self.height()), self.radius, self.radius)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
+
+
+class GlassStat(QFrame):
+    """Floating stat over the house: icon, label, big value, small line."""
+
+    def __init__(self, icon, title, parent=None):
+        super().__init__(parent)
+        self.setObjectName("glass")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet(f"QFrame#glass{{{glass_style(18)}}}")
+        lo = QHBoxLayout(self)
+        lo.setContentsMargins(12, 10, 14, 10)
+        lo.setSpacing(10)
+        self.icon = _bubble(icon, 34, ACCENT, rgba(ACCENT, 0.16))
+        lo.addWidget(self.icon)
+        col = QVBoxLayout()
+        col.setSpacing(0)
+        self.title = _lbl(title, MUTED, 10, 700, 0.6)
+        self.value = _lbl("", TEXT, 19, 500)
+        self.sub = _lbl("", SOFT, 10, 600)
+        for w in (self.title, self.value, self.sub):
+            col.addWidget(w)
+        lo.addLayout(col)
+
+    def set(self, value, sub="", icon=None, color=ACCENT):
+        self.value.setText(value)
+        self.sub.setText(sub)
+        self.sub.setVisible(bool(sub))
+        if icon:
+            self.icon.setPixmap(get_pixmap(icon, color, 17))
+        self.icon.setStyleSheet(f"background:{rgba(color, 0.16)};border-radius:17px;border:none;")
+
+
 # -------------------------------------------------------------------- the page --
 
 class SmartDashboardView(QWidget):
@@ -545,10 +538,14 @@ class SmartDashboardView(QWidget):
         super().__init__(parent)
         self.sv = smart_view
         self.cv = cctv_view
-        self.app_tiles = {}
-        self._app_ids = None
-        self._snap_path = None
+        self.rows = {}
+        self._row_ids = None
+        self._room = "all"
+        self._cam_index = 0
+        self._snap_key = None
+        self._house_sig = None
         self._build()
+        apply_home_style(self)
         self.refresh()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
@@ -569,196 +566,306 @@ class SmartDashboardView(QWidget):
         scroll.setWidget(page)
         outer.addWidget(scroll)
         self.grid = QGridLayout(page)
-        self.grid.setContentsMargins(14, 14, 14, 14)
-        self.grid.setHorizontalSpacing(12)
-        self.grid.setVerticalSpacing(12)
+        self.grid.setContentsMargins(22, 20, 22, 22)
+        self.grid.setHorizontalSpacing(16)
+        self.grid.setVerticalSpacing(16)
 
+        self.header = self._build_header()
         self.hero = self._build_hero()
-        self.t_load = StatTile("Live load", "zap")
-        self.t_bat = StatTile("Battery", "battery")
-        self.t_meter = StatTile("Prepaid meter", "calculator")
-        self.t_cost = StatTile("Energy cost", "activity")
-        self.card_apps = self._build_appliances()
         self.card_rooms = self._build_rooms()
-        self.card_sec = self._build_security()
-        self.card_grid = self._build_grid_card()
-        self.card_meter = self._build_meter_card()
+        self.card_power = self._build_power()
+        self.card_cam = self._build_camera()
+        self.card_week = self._build_week()
+        self.card_meter = self._build_meter()
+        self.card_fridge = self._build_fridge()
+        self.card_energy = self._build_energy()
         self._mode = None
         self._place("wide")
 
     def _place(self, mode):
-        """Lay the cards out for the available width: wide (4 columns),
-        medium (2 columns) or narrow (1 column)."""
+        """wide: 3 columns · medium: 2 · narrow: 1."""
         if mode == self._mode:
             return
         self._mode = mode
         g = self.grid
         while g.count():
             g.takeAt(0)
-        for c in range(4):
+        for c in range(3):
             g.setColumnStretch(c, 0)
-        for r in range(12):
+        for r in range(16):
             g.setRowStretch(r, 0)
-        tiles = (self.t_load, self.t_bat, self.t_meter, self.t_cost)
+        cards = (self.card_power, self.card_cam, self.card_week, self.card_meter, self.card_fridge, self.card_energy)
         if mode == "wide":
-            cols = 4
-            g.addWidget(self.hero, 0, 0, 1, 4)
-            for i, t in enumerate(tiles):
-                g.addWidget(t, 1, i)
-            g.addWidget(self.card_apps, 2, 0, 1, 2)
-            g.addWidget(self.card_rooms, 2, 2)
-            g.addWidget(self.card_sec, 2, 3)
-            g.addWidget(self.card_grid, 3, 0, 1, 2)
-            g.addWidget(self.card_meter, 3, 2, 1, 2)
-            last = 4
+            g.addWidget(self.header, 0, 0, 1, 3)
+            g.addWidget(self.hero, 1, 0, 1, 2)
+            g.addWidget(self.card_rooms, 1, 2)
+            for i, c in enumerate(cards):
+                g.addWidget(c, 2 + i // 3, i % 3)
+            cols, last = 3, 4
         elif mode == "medium":
-            cols = 2
-            g.addWidget(self.hero, 0, 0, 1, 2)
-            for i, t in enumerate(tiles):
-                g.addWidget(t, 1 + i // 2, i % 2)
-            g.addWidget(self.card_apps, 3, 0, 1, 2)
-            g.addWidget(self.card_rooms, 4, 0)
-            g.addWidget(self.card_sec, 4, 1)
-            g.addWidget(self.card_grid, 5, 0, 1, 2)
-            g.addWidget(self.card_meter, 6, 0, 1, 2)
-            last = 7
+            g.addWidget(self.header, 0, 0, 1, 2)
+            g.addWidget(self.hero, 1, 0, 1, 2)
+            seq = (self.card_rooms, *cards)
+            for i, c in enumerate(seq[:-1]):
+                g.addWidget(c, 2 + i // 2, i % 2)
+            g.addWidget(seq[-1], 2 + (len(seq) - 1) // 2, 0, 1, 2)
+            cols, last = 2, 7
         else:
-            cols = 1
-            for i, w in enumerate((self.hero, *tiles, self.card_apps, self.card_rooms, self.card_sec,
-                                   self.card_grid, self.card_meter)):
+            for i, w in enumerate((self.header, self.hero, self.card_rooms, *cards)):
                 g.addWidget(w, i, 0)
-            last = 11
+            cols, last = 1, 10
         for c in range(cols):
             g.setColumnStretch(c, 1)
         g.setRowStretch(last, 1)
-        self.hero_lo.setDirection(QHBoxLayout.LeftToRight if mode == "wide" else QHBoxLayout.TopToBottom)
-        for row in (self.hero_chips, self.hero_acts):
-            row.itemAt(0).changeSize(0 if mode != "wide" else 1, 0,
-                                     QSizePolicy.Fixed if mode != "wide" else QSizePolicy.Expanding)
-            row.setAlignment(Qt.AlignLeft if mode != "wide" else Qt.Alignment())
-            row.invalidate()
-        self._app_cols = 3 if mode != "narrow" else 2
-        self._app_ids = None          # re-flow the appliance tiles
+        self.hero.setMinimumHeight(430 if mode == "wide" else 360)
+        self.header_lo.setDirection(QHBoxLayout.LeftToRight if mode == "wide" else QHBoxLayout.TopToBottom)
+        self.header_lo.setAlignment(self.header_right, Qt.AlignVCenter if mode == "wide" else Qt.AlignLeft)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
         w = self.width()
-        self._place("wide" if w >= 1180 else "medium" if w >= 640 else "narrow")
-        if self._app_ids is None:
-            self.refresh()
+        self._place("wide" if w >= 1000 else "medium" if w >= 700 else "narrow")
+
+    # header ------------------------------------------------------------------
+
+    def _build_header(self):
+        box = QWidget()
+        box.setStyleSheet("background:transparent;")
+        lo = QHBoxLayout(box)
+        self.header_lo = lo
+        lo.setContentsMargins(4, 0, 4, 0)
+        lo.setSpacing(14)
+        left = QVBoxLayout()
+        left.setSpacing(2)
+        self.greet = _lbl("", TEXT, 28, 300)
+        self.date = _lbl("", MUTED, 12, 600, 0.3)
+        left.addWidget(self.greet)
+        left.addWidget(self.date)
+        lo.addLayout(left, 1)
+        right = QHBoxLayout()
+        right.setSpacing(8)
+        self.c_grid, self.c_arm, self.c_meter = QLabel(), QLabel(), QLabel()
+        for c in (self.c_grid, self.c_arm, self.c_meter):
+            right.addWidget(c, 0, Qt.AlignVCenter)
+        right.addSpacing(6)
+        right.addWidget(_action("All off", "power", self._all_off))
+        self.arm_btn = _action("Arm", "shield", self._toggle_arm)
+        right.addWidget(self.arm_btn)
+        right.addWidget(_action("Bought token", "plus", lambda: self._energy_action("_log_token"), primary=True))
+        lo.addLayout(right)
+        lo.setAlignment(right, Qt.AlignVCenter)
+        self.header_right = right
+        return box
+
+    # hero: the house ----------------------------------------------------------
 
     def _build_hero(self):
         hero = QFrame()
         hero.setObjectName("dash_hero")
         hero.setAttribute(Qt.WA_StyledBackground, True)
-        hero.setStyleSheet("QFrame#dash_hero{border-radius:20px;border:1px solid rgba(255,255,255,0.12);"
-                           "background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 rgba(56,189,248,0.20),"
-                           "stop:0.55 rgba(18,26,34,0.80),stop:1 rgba(16,185,129,0.16));}")
-        lo = QHBoxLayout(hero)
-        self.hero_lo = lo
-        lo.setContentsMargins(22, 18, 22, 18)
-        lo.setSpacing(18)
-        left = QVBoxLayout()
-        left.setSpacing(4)
-        self.greet = _lbl("", TEXT, 26, 300)
-        self.date = _lbl("", SOFT, 12, 600, 0.4)
-        self.summary = _lbl("", MUTED, 12, 500)
-        self.summary.setWordWrap(True)
-        left.addWidget(self.greet)
-        left.addWidget(self.date)
-        left.addSpacing(4)
-        left.addWidget(self.summary)
-        lo.addLayout(left, 1)
+        hero.setStyleSheet("QFrame#dash_hero{border-radius:24px;border:1px solid rgba(255,255,255,0.07);"
+                           "background:#120f0d;}")
+        g = QGridLayout(hero)
+        g.setContentsMargins(0, 0, 0, 0)
+        self.house = HeroHouse(self.sv.model)
+        self.house.view.device_clicked.connect(self._toggle)
+        g.addWidget(self.house, 0, 0)
 
-        right = QVBoxLayout()
-        right.setSpacing(10)
-        chips = QHBoxLayout()
-        chips.setSpacing(8)
-        chips.addStretch()
-        self.hero_chips = chips
-        self.c_grid, self.c_arm, self.c_meter = QLabel(), QLabel(), QLabel()
-        for c in (self.c_grid, self.c_arm, self.c_meter):
-            chips.addWidget(c)
-        right.addLayout(chips)
-        acts = QHBoxLayout()
-        acts.setSpacing(8)
-        acts.addStretch()
-        self.hero_acts = acts
-        acts.addWidget(_action("All off", "power", self._all_off))
-        self.arm_btn = _action("Arm", "shield", self._toggle_arm)
-        acts.addWidget(self.arm_btn)
-        acts.addWidget(_action("Bought token", "plus", lambda: self._energy_action("_log_token")))
-        acts.addWidget(_action("3D map", "home", lambda: self._go("smart_home"), primary=True))
-        right.addLayout(acts)
-        lo.addLayout(right)
+        stats = QWidget()
+        stats.setStyleSheet("background:transparent;")
+        sl = QVBoxLayout(stats)
+        sl.setContentsMargins(18, 18, 18, 18)
+        sl.setSpacing(10)
+        self.g_load = GlassStat("zap", "LIVE LOAD")
+        self.g_bat = GlassStat("battery", "BATTERY")
+        self.g_grid = GlassStat("power", "GRID")
+        for w in (self.g_load, self.g_bat, self.g_grid):
+            sl.addWidget(w)
+        g.addWidget(stats, 0, 0, Qt.AlignTop | Qt.AlignLeft)
+
+        self.g_weather = GlassStat("cloud_sun", "WEATHER")
+        wbox = QWidget()
+        wbox.setStyleSheet("background:transparent;")
+        wl = QVBoxLayout(wbox)
+        wl.setContentsMargins(18, 18, 18, 18)
+        wl.addWidget(self.g_weather)
+        g.addWidget(wbox, 0, 0, Qt.AlignTop | Qt.AlignRight)
+
+        bottom = QWidget()
+        bottom.setStyleSheet("background:transparent;")
+        bl = QHBoxLayout(bottom)
+        bl.setContentsMargins(18, 14, 18, 16)
+        hint = QLabel("Drag to turn  ·  click an appliance to switch it")
+        hint.setStyleSheet(f"{glass_style(12)}padding:5px 10px;font-size:11px;color:{SOFT};")
+        bl.addWidget(hint)
+        bl.addStretch()
+        open3d = QPushButton(" Open 3D")
+        open3d.setIcon(get_icon("maximize", TEXT, 13))
+        open3d.setCursor(Qt.PointingHandCursor)
+        open3d.setStyleSheet(f"QPushButton{{{glass_style(14)}padding:6px 12px;font-weight:700;}}"
+                             f"QPushButton:hover{{background:rgba(40,36,33,0.9);}}")
+        open3d.clicked.connect(lambda: self._go("smart_home"))
+        bl.addWidget(open3d)
+        g.addWidget(bottom, 0, 0, Qt.AlignBottom)
         return hero
 
-    def _build_appliances(self):
-        card, lo, head = _card("Appliances", "power")
-        self.app_count = _lbl("", MUTED, 11, 600)
-        head.addWidget(self.app_count)
-        self.app_grid = QGridLayout()
-        self.app_grid.setHorizontalSpacing(8)
-        self.app_grid.setVerticalSpacing(8)
-        lo.addLayout(self.app_grid)
-        lo.addStretch()
-        return card
+    # rooms ------------------------------------------------------------------------
 
     def _build_rooms(self):
-        card, lo, _ = _card("Load by room", "home")
-        self.rooms = RoomBars()
-        self.rooms.room_clicked.connect(self._focus_room)
-        lo.addWidget(self.rooms)
-        self.rooms_note = _lbl("", MUTED, 10, 500)
+        card, lo, head = _card("Rooms", "home")
+        self.rooms_count = _lbl("", MUTED, 11, 600)
+        head.addWidget(self.rooms_count)
+        self.chips = QHBoxLayout()
+        self.chips.setSpacing(6)
+        self.chip_group = QButtonGroup(self)
+        self.chip_group.setExclusive(True)
+        self.chip_btns = {}
+        lo.addLayout(self.chips)
+        self.rows_lo = QVBoxLayout()
+        self.rows_lo.setSpacing(6)
+        lo.addLayout(self.rows_lo)
+        lo.addStretch()
+        self.rooms_note = _lbl("", DIM, 11, 500)
         self.rooms_note.setWordWrap(True)
         lo.addWidget(self.rooms_note)
-        lo.addStretch()
         return card
 
-    def _build_security(self):
-        card, lo, head = _card("Security", "shield")
-        self.sec_chip = QLabel()
-        head.addWidget(self.sec_chip)
-        self.snap = QLabel()
-        self.snap.setAlignment(Qt.AlignCenter)
-        self.snap.setMinimumHeight(110)
-        self.snap.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
-        self.snap.setStyleSheet("background:#05080d;border-radius:10px;color:#64748b;font-size:11px;")
-        lo.addWidget(self.snap)
-        self.snap_cap = _lbl("", MUTED, 10, 500)
-        lo.addWidget(self.snap_cap)
-        self.sec_line = _lbl("", SOFT, 12, 600)
-        self.sec_line.setWordWrap(True)
-        lo.addWidget(self.sec_line)
-        lo.addStretch()
-        lo.addWidget(_action("Open CCTV", "video", lambda: self._go("cctv")))
+    def _chip_btn(self, key, text):
+        b = QPushButton(text)
+        b.setCheckable(True)
+        b.setCursor(Qt.PointingHandCursor)
+        b.setFixedHeight(30)
+        b.setStyleSheet(f"QPushButton{{background:rgba(255,255,255,0.06);color:{SOFT};border:none;"
+                        f"border-radius:15px;padding:0 14px;font-weight:600;}}"
+                        f"QPushButton:hover{{background:rgba(255,255,255,0.11);}}"
+                        f"QPushButton:checked{{background:{ACCENT};color:{ON_ACCENT};font-weight:800;}}")
+        b.clicked.connect(lambda _=False, k=key: self._pick_room(k))
+        self.chip_group.addButton(b)
+        return b
+
+    # power, camera, week ------------------------------------------------------------
+
+    def _build_power(self):
+        card, lo, head = _card("Power", "zap")
+        self.power_chip = QLabel()
+        head.addWidget(self.power_chip)
+        self.dial = ArcDial()
+        self.dial.setMinimumHeight(190)
+        lo.addWidget(self.dial, 1)
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self.p_stats = []
+        for title in ("Battery", "Runtime", "Cost now"):
+            box = QFrame()
+            box.setStyleSheet("QFrame{background:rgba(255,255,255,0.04);border-radius:14px;}")
+            bl = QVBoxLayout(box)
+            bl.setContentsMargins(10, 8, 10, 8)
+            bl.setSpacing(0)
+            t = _lbl(title, MUTED, 10, 600)
+            v = _lbl("", TEXT, 14, 600)
+            bl.addWidget(t)
+            bl.addWidget(v)
+            row.addWidget(box, 1)
+            self.p_stats.append(v)
+        lo.addLayout(row)
+        self.power_note = _lbl("", DIM, 11, 500)
+        self.power_note.setWordWrap(True)
+        lo.addWidget(self.power_note)
         return card
 
-    def _build_grid_card(self):
-        card, lo, head = _card("Grid supply · last 24 h", "zap")
-        self.grid_chip = QLabel()
-        head.addWidget(self.grid_chip)
-        self.strip = GridStrip()
-        lo.addWidget(self.strip)
-        legend = QHBoxLayout()
-        legend.setSpacing(14)
-        for text, color in (("Grid on", GOOD), ("Power cut", CRIT)):
-            sw = QLabel()
-            sw.setFixedSize(10, 10)
-            sw.setStyleSheet(f"background:{color};border-radius:3px;")
-            legend.addWidget(sw)
-            legend.addWidget(_lbl(text, MUTED, 11, 600))
-        legend.addStretch()
-        self.grid_stats = _lbl("", SOFT, 11, 600)
-        legend.addWidget(self.grid_stats)
-        lo.addLayout(legend)
+    def _build_camera(self):
+        card, lo, head = _card("Camera", "video")
+        self.cam_name = _lbl("", MUTED, 11, 600)
+        head.addWidget(self.cam_name)
+        prev_b = _round_btn("chevron_left", "Previous camera", lambda: self._cycle_cam(-1), size=28)
+        next_b = _round_btn("chevron_right", "Next camera", lambda: self._cycle_cam(1), size=28)
+        head.addWidget(prev_b)
+        head.addWidget(next_b)
+        self.cam_nav = (prev_b, next_b)
+        holder = QWidget()
+        hg = QGridLayout(holder)
+        hg.setContentsMargins(0, 0, 0, 0)
+        self.cam_img = QLabel()
+        self.cam_img.setMinimumHeight(180)
+        self.cam_img.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
+        self.cam_img.setAlignment(Qt.AlignCenter)
+        self.cam_img.setStyleSheet(f"background:#0c0b0a;border-radius:16px;color:{DIM};font-size:12px;")
+        hg.addWidget(self.cam_img, 0, 0)
+        self.cam_badge = QLabel()
+        badge_box = QWidget()
+        badge_box.setStyleSheet("background:transparent;")
+        bb = QHBoxLayout(badge_box)
+        bb.setContentsMargins(10, 10, 10, 10)
+        bb.addWidget(self.cam_badge)
+        hg.addWidget(badge_box, 0, 0, Qt.AlignTop | Qt.AlignLeft)
+        ctl = QWidget()
+        ctl.setStyleSheet("background:transparent;")
+        cl = QHBoxLayout(ctl)
+        cl.setContentsMargins(10, 10, 10, 12)
+        cl.setSpacing(8)
+        cl.addStretch()
+        cl.addWidget(_round_btn("camera", "Take a snapshot", self._snapshot))
+        self.cam_arm = _round_btn("shield", "Arm / disarm motion alerts", self._toggle_arm)
+        cl.addWidget(self.cam_arm)
+        cl.addWidget(_round_btn("maximize", "Open CCTV", lambda: self._go("cctv")))
+        self.cam_power = _round_btn("power", "Start / stop this camera", self._cam_power, danger=True)
+        cl.addWidget(self.cam_power)
+        cl.addStretch()
+        hg.addWidget(ctl, 0, 0, Qt.AlignBottom)
+        lo.addWidget(holder, 1)
+        self.cam_line = _lbl("", MUTED, 11, 500)
+        lo.addWidget(self.cam_line)
         return card
 
-    def _build_meter_card(self):
-        card, lo, head = _card("Meter units · last 14 days", "calculator")
-        head.addWidget(_action("Meter reading", "zap", lambda: self._energy_action("_log_reading")))
+    def _build_week(self):
+        card, lo, head = _card("Power cuts this week", "activity")
+        self.week_chip = QLabel()
+        head.addWidget(self.week_chip)
+        self.week = WeekBars(fmt=lambda v: _fmt_h(v))
+        lo.addWidget(self.week, 1)
+        self.week_note = _lbl("", MUTED, 11, 500)
+        self.week_note.setWordWrap(True)
+        lo.addWidget(self.week_note)
+        return card
+
+    # meter, fridge, energy ---------------------------------------------------------
+
+    def _build_meter(self):
+        card, lo, head = _card("Prepaid meter", "calculator")
+        head.addWidget(_action("Reading", "zap", lambda: self._energy_action("_log_reading")))
+        self.m_big = _lbl("", TEXT, 30, 300)
+        self.m_sub = _lbl("", SOFT, 12, 600)
+        self.m_sub.setWordWrap(True)
+        lo.addWidget(self.m_big)
+        lo.addWidget(self.m_sub)
         self.spark = Sparkline()
-        lo.addWidget(self.spark)
+        self.spark.setMinimumHeight(110)
+        lo.addWidget(self.spark, 1)
+        return card
+
+    def _build_fridge(self):
+        card, lo, head = _card("Fridge", "fridge")
+        self.f_chip = QLabel()
+        head.addWidget(self.f_chip)
+        self.f_rows = QVBoxLayout()
+        self.f_rows.setSpacing(4)
+        lo.addLayout(self.f_rows)
+        lo.addStretch()
+        lo.addWidget(_action("Open fridge", "fridge", lambda: self._go("fridge")))
+        self._f_labels = []
+        return card
+
+    def _build_energy(self):
+        card, lo, _ = _card("Energy cost", "activity")
+        self.e_big = _lbl("", TEXT, 30, 300)
+        self.e_sub = _lbl("", SOFT, 12, 600)
+        self.e_sub.setWordWrap(True)
+        lo.addWidget(self.e_big)
+        lo.addWidget(self.e_sub)
+        self.rooms = RoomBars(click_hint="Click to show this room on the house")
+        self.rooms.room_clicked.connect(self._pick_room)
+        lo.addWidget(self.rooms)
+        lo.addStretch()
         return card
 
     # --------------------------------------------------------------- refresh --
@@ -777,26 +884,25 @@ class SmartDashboardView(QWidget):
         cur = pw.get("currency", "₦")
         now = time.time()
         price = e.price_per_kwh() or pw.get("tariff", 0)
-
-        # ---- hero
-        hour = datetime.now().hour
-        part = "morning" if 5 <= hour < 12 else "afternoon" if hour < 17 else "evening"
-        self.greet.setText(f"Good {part}")
-        self.date.setText(datetime.now().strftime("%A, %d %B  ·  %H:%M"))
         devices = m.devices()
         on = [d for d in devices if d["device"]["on"]]
         out = e.open_outage()
         armed = bool(self.cv.store.config.get("armed"))
         days = e.days_left()
-        bits = [f"{len(on)} of {len(devices)} appliances on, drawing {m.load_w():,.0f} W"]
+        watching = self.sv.grid_watching() if hasattr(self.sv, "grid_watching") else e.grid_detect
+        inv = getattr(self.sv, "inverter", None)
+        measured = inv is not None and inv.load_w() is not None
+
+        # ---- header
+        hour = datetime.now().hour
+        part = "morning" if 5 <= hour < 12 else "afternoon" if hour < 17 else "evening"
+        win = self.window()
+        who = (getattr(win, "user", None) or {}).get("username", "")
+        self.greet.setText(f"Good {part}" + (f", {who}" if who else ""))
+        self.date.setText(datetime.now().strftime("%A, %d %B  ·  %H:%M"))
         if out:
-            bits.append(f"grid off for {_fmt_h((now - out['start']) / 3600)}")
-        if days is not None:
-            bits.append(f"meter lasts about {_fmt_h(days * 24)}")
-        self.summary.setText(" · ".join(bits) + ".")
-        if out:
-            self._chip(self.c_grid, "● Grid off", CRIT)
-        elif e.grid_detect:
+            self._chip(self.c_grid, f"● Grid off {_fmt_h((now - out['start']) / 3600)}", CRIT)
+        elif watching:
             self._chip(self.c_grid, "● Grid on", GOOD)
         else:
             self._chip(self.c_grid, "Grid not watched", DIM)
@@ -807,143 +913,221 @@ class SmartDashboardView(QWidget):
             self.c_meter.hide()
         self.arm_btn.setText(" Disarm" if armed else " Arm")
 
-        # ---- KPI tiles
+        # ---- hero
         load = m.load_w()
         cap = max(1, pw.get("inverter_w", 3000))
         frac = load / cap
-        lc = CRIT if frac > 0.9 else WARN if frac > 0.7 else ACCENT
-        self.t_load.ring.set(frac, f"{frac * 100:.0f}%", "of inverter", lc)
-        self.t_load.value.setText(f"{load:,.0f} W")
-        self.t_load.detail.setText(f"{len(on)} of {len(devices)} appliances on")
-        self.t_load.sub.setText(f"Inverter capacity {cap:,} W")
-        self.t_load.set_chip("Overload risk" if frac > 0.9 else "", CRIT)
-
+        self.g_load.set(f"{load:,.0f} W", f"{frac * 100:.0f}% of inverter" + (" · measured" if measured else ""),
+                        "zap", CRIT if frac > 0.9 else WARN if frac > 0.7 else ACCENT)
         pct = pw.get("battery_pct", 100)
-        bc = CRIT if pct < 20 else WARN if pct < 40 else GOOD
-        self.t_bat.ring.set(pct / 100, f"{pct:.0f}%", "charge", bc)
         rt = m.runtime_hours()
-        self.t_bat.value.setText(_fmt_h(rt) if rt else "Idle")
-        self.t_bat.detail.setText("runtime at the current load" if rt else "nothing is drawing power")
-        b = e.last_battery()
-        src = pw.get("source", "Grid")
-        sub = f"Source: {src}"
-        if b and "volts" in b:
-            sub += f"  ·  {b['volts']:g} V read {datetime.fromtimestamp(b['ts']):%H:%M}"
-        self.t_bat.sub.setText(sub)
-        self.t_bat.set_chip("Low" if pct < 20 else "", CRIT)
+        self.g_bat.set(f"{pct:.0f}%", f"lasts {_fmt_h(rt)}" if rt else "nothing drawing",
+                       "battery", CRIT if pct < 20 else WARN if pct < 40 else GOOD)
+        charging = inv.charging_w() if inv is not None else None
+        if out:
+            self.g_grid.set("Off", f"for {_fmt_h((now - out['start']) / 3600)}", "power", CRIT)
+        elif watching:
+            self.g_grid.set("On", f"charging ≈ {charging:,.0f} W" if charging else "watching", "power", GOOD)
+        else:
+            self.g_grid.set("—", "not watched", "power", DIM)
+        wsvc = getattr(win, "weather", None)
+        w = getattr(wsvc, "now", None)
+        if w and w.get("temp") is not None:
+            self.g_weather.title.setText(w["place"].split(",")[0].upper())
+            self.g_weather.set(f"{w['temp']:.0f}°  {w['desc']}",
+                               f"Solar today: {w['solar']}" if w.get("solar") else f"Humidity {w['humidity']}%",
+                               w["icon"], ACCENT)
+            self.g_weather.show()
+        else:
+            self.g_weather.hide()
+        sig = tuple((d["id"], d["device"]["on"]) for d in devices)
+        if sig != self._house_sig:
+            self._house_sig = sig
+            self.house.view.invalidate()
 
+        # ---- rooms
+        self._refresh_rooms(m)
+
+        # ---- power dial
+        lc = CRIT if frac > 0.9 else WARN if frac > 0.7 else ACCENT
+        self.dial.set(frac, f"{load:,.0f}", "watts" + (" · measured" if measured else ""),
+                      f"{frac * 100:.0f}% of the inverter", "0", f"{cap / 1000:.1f} kW".replace(".0 kW", " kW"), lc)
+        if frac > 0.9:
+            self._chip(self.power_chip, "Overload risk", CRIT)
+        else:
+            self.power_chip.hide()
+        per_hour = load / 1000 * price
+        self.p_stats[0].setText(f"{pct:.0f}%")
+        self.p_stats[1].setText(_fmt_h(rt) if rt else "—")
+        self.p_stats[2].setText(f"{_money(cur, per_hour)}/h")
+        src = pw.get("source", "Grid")
+        self.power_note.setText(f"Source: {src}" + (f"  ·  {len(on)} of {len(devices)} appliances on"))
+
+        # ---- camera, week, meter, fridge, energy
+        self._refresh_camera(armed)
+        self._refresh_week(e, now, watching)
         left = e.units_left()
         rate = e.burn_rate()
         if left is None:
-            self.t_meter.ring.set(0, "—", "", DIM)
-            self.t_meter.value.setText("— kWh")
-            self.t_meter.detail.setText("No meter reading yet")
-            self.t_meter.sub.setText("Log one with “Meter reading”")
-            self.t_meter.set_chip("", ACCENT)
+            self.m_big.setText("— kWh")
+            self.m_sub.setText("No reading yet — tap Reading and type the units left on the meter.")
         else:
-            week = (rate or 0) * 7
-            if days is None:
-                self.t_meter.ring.set(0, "—", "days left", DIM)
-            else:
-                mc = CRIT if days < 1 else WARN if days < 2 else ACCENT
-                self.t_meter.ring.set(min(1.0, days / 7), f"{days:.1f}" if days >= 2 else _fmt_h(days * 24),
-                                      "days left" if days >= 2 else "left", mc)
-            self.t_meter.value.setText(f"{left:,.1f} kWh")
-            self.t_meter.detail.setText(f"{rate:.1f} kWh / day" if rate else "usage: needs a 2nd reading")
-            self.t_meter.sub.setText(f"≈ {week:,.0f} kWh a week" if rate else "Ring = days left out of 7")
-            self.t_meter.set_chip("Buy soon" if days is not None and days < 2 else "", WARN)
-
+            self.m_big.setText(f"{left:,.1f} kWh")
+            bits = []
+            if days is not None:
+                bits.append(f"≈ {_fmt_h(days * 24)} left")
+            if rate:
+                bits.append(f"{rate:.1f} kWh a day")
+            if e.price_per_kwh():
+                bits.append(f"{cur}{e.price_per_kwh():,.1f}/kWh paid")
+            self.m_sub.setText("  ·  ".join(bits) or "Log a second reading to see how fast it goes.")
+        self.spark.set_points([(r["ts"], r["units"]) for r in e.readings if r["ts"] >= now - 14 * 86400])
+        self._refresh_fridge(getattr(win, "fridge", None))
         kwh = m.daily_kwh()
         per_day = kwh * price
-        per_hour = load / 1000 * price
-        month = per_day * 30
-        usual = per_day / 24
-        ratio = per_hour / usual if usual else 0
-        self.t_cost.ring.set(min(1.0, ratio / 2), f"{ratio * 100:.0f}%", "of usual / h",
-                             WARN if ratio > 1.5 else ACCENT)
-        self.t_cost.ring.setToolTip(f"Right now: {_money(cur, per_hour)} per hour. A typical hour costs "
-                                    f"{_money(cur, usual)}. Full ring = twice the usual.")
-        self.t_cost.value.setText(f"{_money(cur, per_day)} / day")
-        self.t_cost.detail.setText(f"{_money(cur, per_hour)}/h now  ·  {_money(cur, month)}/mo")
-        self.t_cost.sub.setText(f"{kwh:.2f} kWh/day at {cur}{price:,.1f}/kWh"
-                                + (" paid" if e.price_per_kwh() else " tariff"))
+        self.e_big.setText(f"{_money(cur, per_day)} / day")
+        self.e_sub.setText(f"{_money(cur, per_hour)}/h now  ·  {_money(cur, per_day * 30)} a month  ·  "
+                           f"{kwh:.1f} kWh a day")
+        self.rooms.set_rows([(r["id"], r["name"], m.load_w(r["id"])) for r in m.rooms])
 
-        # ---- appliances, rooms, grid, meter, security
-        self._refresh_appliances(m)
-        rows = [(r["id"], r["name"], m.load_w(r["id"])) for r in m.rooms]
-        self.rooms.set_rows(rows)
-        busiest = max(rows, key=lambda r: r[2]) if rows else None
-        self.rooms_note.setText(f"{busiest[1]} draws the most right now." if busiest and busiest[2] > 0
-                                else "Everything is off.")
-
-        self.strip.set_data(e.outages, e.grid_detect)
-        hrs = e.outage_hours(now - 86400, now)
-        self.grid_stats.setText(f"{_fmt_h(hrs)} without grid" if e.outages else
-                                ("No power cuts" if e.grid_detect else "Turn on detection in Smart Home"))
-        if out:
-            self._chip(self.grid_chip, f"Off {_fmt_h((now - out['start']) / 3600)}", CRIT)
-        elif e.grid_detect:
-            self._chip(self.grid_chip, "On", GOOD)
-        else:
-            self._chip(self.grid_chip, "Not watched", DIM)
-
-        cutoff = now - 14 * 86400
-        self.spark.set_points([(r["ts"], r["units"]) for r in e.readings if r["ts"] >= cutoff])
-
-        self._refresh_security(armed)
-
-    def _refresh_appliances(self, m):
+    def _refresh_rooms(self, m):
         names = {r["id"]: r["name"] for r in m.rooms}
-        devices = sorted(m.devices(), key=lambda d: (d["room"], d["name"]))   # stable: tiles never jump
+        keys = ["all"] + [r["id"] for r in m.rooms]
+        if list(self.chip_btns) != keys:
+            for b in self.chip_btns.values():
+                self.chip_group.removeButton(b)
+                b.setParent(None)
+            self.chip_btns = {}
+            for k in keys:
+                b = self._chip_btn(k, "All" if k == "all" else names[k])
+                self.chip_btns[k] = b
+                self.chips.addWidget(b)
+            self.chips.addStretch()
+            if self._room not in self.chip_btns:
+                self._room = "all"
+        self.chip_btns[self._room].setChecked(True)
+        devices = sorted(m.devices() if self._room == "all" else m.devices(self._room),
+                         key=lambda d: (not d["device"]["on"], d["room"], d["name"]))
         ids = [d["id"] for d in devices]
-        if ids != self._app_ids:
-            self._app_ids = ids
-            while self.app_grid.count():
-                w = self.app_grid.takeAt(0).widget()
+        if ids != self._row_ids:
+            self._row_ids = ids
+            while self.rows_lo.count():
+                w = self.rows_lo.takeAt(0).widget()
                 if w:
                     w.setParent(None)
             keep = {}
-            for i, d in enumerate(devices):
-                tile = self.app_tiles.get(d["id"]) or ApplianceTile(d["id"])
-                if d["id"] not in self.app_tiles:
-                    tile.clicked.connect(self._toggle)
-                keep[d["id"]] = tile
-                self.app_grid.addWidget(tile, i // self._app_cols, i % self._app_cols)
-            for iid, t in self.app_tiles.items():
-                if iid not in keep:
-                    t.deleteLater()
-            self.app_tiles = keep
+            for d in devices:
+                row = self.rows.get(d["id"])
+                if row is None:
+                    row = DeviceRow(d["id"])
+                    row.switched.connect(self._switch)
+                keep[d["id"]] = row
+                self.rows_lo.addWidget(row)
+            self.rows.update(keep)
         for d in devices:
-            self.app_tiles[d["id"]].set_item(d, names.get(d["room"], ""), m.live_w(d["id"]))
-        on = sum(1 for d in devices if d["device"]["on"])
-        self.app_count.setText(f"{on} on · tap to switch")
+            self.rows[d["id"]].set_item(d, names.get(d["room"], "") if self._room == "all" else "",
+                                        m.live_w(d["id"]))
+        n_on = sum(1 for d in devices if d["device"]["on"])
+        self.rooms_count.setText(f"{n_on} of {len(devices)} on")
+        room_w = m.load_w(None if self._room == "all" else self._room)
+        self.rooms_note.setText(f"{names.get(self._room, 'The house')} is drawing {room_w:,.0f} W."
+                                if room_w else "Everything here is off.")
 
-    def _refresh_security(self, armed):
-        store, feeds = self.cv.store, self.cv.feeds
-        self._chip(self.sec_chip, "Armed" if armed else "Disarmed", GOOD if armed else DIM)
-        live = sum(1 for f in feeds.values() if f.running)
+    def _feeds_with_picture(self):
+        return [f for f in self.cv.feeds.values() if f.running and f.image is not None and not f.image.isNull()]
+
+    def _refresh_camera(self, armed):
+        store = self.cv.store
+        self.cam_arm.setIcon(get_icon("shield" if armed else "unlock", GOOD if armed else "#e7e5e4", 16))
+        live = self._feeds_with_picture()
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
-        motions = [ev for ev in store.events_since(today) if ev["kind"] == "motion"]
-        cams = len(store.cameras)
-        self.sec_line.setText(f"{live} of {cams} camera{'s' if cams != 1 else ''} live  ·  "
-                              f"{len(motions)} motion event{'s' if len(motions) != 1 else ''} today")
-        latest = next((ev for ev in reversed(store.events) if ev.get("snapshot")), None)
-        path = latest["snapshot"] if latest else None
-        if path != self._snap_path or self.snap.width() != getattr(self, "_snap_w", 0):
-            self._snap_path, self._snap_w = path, self.snap.width()
-            pm = QPixmap(path) if path else QPixmap()
-            if pm.isNull():
-                self.snap.setPixmap(QPixmap())
-                self.snap.setText("No snapshots yet")
-            else:
-                self.snap.setPixmap(pm.scaled(QSize(max(1, self.snap.width()), 110),
-                                              Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        if latest:
-            kind = "Motion" if latest["kind"] == "motion" else "Snapshot"
-            self.snap_cap.setText(f"{kind} · {latest['camera_name']} · "
-                                  f"{datetime.fromtimestamp(latest['ts']):%a %H:%M}")
+        motions = sum(1 for ev in store.events_since(today) if ev["kind"] == "motion")
+        for b in self.cam_nav:
+            b.setVisible(len(live) > 1)
+        w, h = max(1, self.cam_img.width()), max(1, self.cam_img.height())
+        if live:
+            feed = live[self._cam_index % len(live)]
+            self.cam_name.setText(feed.cam["name"])
+            self.cam_badge.setText("●  Live")
+            self.cam_badge.setStyleSheet(f"QLabel{{background:{CRIT};color:#fff;border-radius:11px;"
+                                         "padding:3px 10px;font-size:11px;font-weight:800;}")
+            self.cam_img.setPixmap(rounded_pixmap(QPixmap.fromImage(feed.image), w, h))
+            self._snap_key = None
+            self.cam_power.setToolTip(f"Stop {feed.cam['name']}")
         else:
-            self.snap_cap.setText("Motion snapshots appear here")
+            latest = next((ev for ev in reversed(store.events) if ev.get("snapshot")), None)
+            key = (latest["snapshot"] if latest else None, w, h)
+            if key != self._snap_key:
+                self._snap_key = key
+                pm = QPixmap(latest["snapshot"]) if latest else QPixmap()
+                if pm.isNull():
+                    self.cam_img.setPixmap(QPixmap())
+                    self.cam_img.setText("No camera picture yet.\nStart a camera on the CCTV page.")
+                else:
+                    self.cam_img.setPixmap(rounded_pixmap(pm, w, h))
+            self.cam_name.setText(latest["camera_name"] if latest else "")
+            self.cam_badge.setText(f"{'Motion' if latest and latest['kind'] == 'motion' else 'Snapshot'}  ·  "
+                                   f"{datetime.fromtimestamp(latest['ts']):%a %H:%M}" if latest else "Off")
+            self.cam_badge.setStyleSheet(f"QLabel{{{glass_style(11)}padding:3px 10px;font-size:11px;"
+                                         "font-weight:700;}")
+            self.cam_power.setToolTip("Start the cameras")
+        cams = len(store.cameras)
+        self.cam_line.setText(f"{'Armed' if armed else 'Disarmed'}  ·  {len(live)} of {cams} camera"
+                              f"{'s' if cams != 1 else ''} live  ·  {motions} motion today")
+
+    def _refresh_week(self, e, now, watching):
+        days = e.daily_outage_hours(7, now)
+        total = sum(h for _, h in days)
+        longest = e.longest_outage_hours(now - 7 * 86400, now)
+        self.week.set_bars([("Today" if i == len(days) - 1 else d.strftime("%a"), h,
+                             f"{d:%a %d %b}: {_fmt_h(h)} without grid" if h else f"{d:%a %d %b}: no power cut",
+                             i == len(days) - 1) for i, (d, h) in enumerate(days)])
+        if not watching and not e.outages:
+            self.week_note.setText("Not watching the grid yet: link a smart plug to the inverter input "
+                                   "(Smart Devices) or turn on charger detection on the Smart Home page.")
+            self._chip(self.week_chip, "Not watched", DIM)
+        else:
+            self.week_note.setText(f"{_fmt_h(total)} without grid in 7 days" +
+                                   (f"  ·  longest cut {_fmt_h(longest)}" if longest else ""))
+            avg = total / 7
+            self._chip(self.week_chip, f"{avg:.1f} h a day", CRIT if avg >= 6 else WARN if avg >= 1 else GOOD)
+
+    def _refresh_fridge(self, store):
+        for w in self._f_labels:
+            w.setParent(None)
+        self._f_labels = []
+        if store is None:
+            return
+        items = sorted(store.items(), key=lambda v: (not v["low"], v["days_left"] if v["days_left"] is not None
+                                                      else 999, v["name"]))
+        low = [v for v in items if v["low"]]
+        if low:
+            self._chip(self.f_chip, f"{len(low)} running low", CRIT)
+        else:
+            self.f_chip.hide()
+        for v in items[:5]:
+            row = QWidget()
+            row.setStyleSheet("background:transparent;")
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(0, 3, 0, 3)
+            name = _lbl(v["name"], CRIT if v["low"] else TEXT, 13, 600)
+            when = _lbl(("runs out today" if v["days_left"] < 1 else f"{v['days_left']:.0f} days left")
+                        if v["days_left"] is not None else "", MUTED, 11, 500)
+            est = v["estimate"]
+            n = f"≈{est:.0f}" if v["rate"] and abs(est - v["count"]) >= 0.5 else str(v["count"])
+            num = _lbl(n, CRIT if v["low"] else TEXT, 17, 600)
+            rl.addWidget(name)
+            rl.addStretch()
+            rl.addWidget(when)
+            rl.addSpacing(10)
+            rl.addWidget(num)
+            self.f_rows.addWidget(row)
+            self._f_labels.append(row)
+        if not items:
+            hint = _lbl("Nothing tracked yet. Check a photo of the open fridge.", MUTED, 12, 500)
+            hint.setWordWrap(True)
+            self.f_rows.addWidget(hint)
+            self._f_labels.append(hint)
 
     @staticmethod
     def _chip(label, text, color):
@@ -952,6 +1136,12 @@ class SmartDashboardView(QWidget):
         label.show()
 
     # --------------------------------------------------------------- actions --
+
+    def _switch(self, item_id, want):
+        it = self.sv.model.item(item_id)
+        if it and it["device"]["on"] != want:
+            self.sv._toggle(item_id)
+        self.refresh()
 
     def _toggle(self, item_id):
         self.sv._toggle(item_id)
@@ -969,11 +1159,34 @@ class SmartDashboardView(QWidget):
         getattr(self.sv, name)()
         self.refresh()
 
+    def _pick_room(self, key):
+        self._room = key
+        if key == "all":
+            self.house.view.reset_camera()
+        else:
+            self.house.view.focus_room(key)
+        self.refresh()
+
+    def _cycle_cam(self, step):
+        self._cam_index += step
+        self.refresh()
+
+    def _snapshot(self):
+        live = self._feeds_with_picture()
+        if live:
+            self.cv.manual_snapshot(live[self._cam_index % len(live)])
+        self.refresh()
+
+    def _cam_power(self):
+        live = self._feeds_with_picture()
+        if live:
+            self.cv.stop_camera(live[self._cam_index % len(live)])
+        else:
+            for f in self.cv.feeds.values():
+                self.cv.start_camera(f)
+        self.refresh()
+
     def _go(self, module_id):
         win = self.window()
         if hasattr(win, "navigate_by_id"):
             win.navigate_by_id(module_id)
-
-    def _focus_room(self, room_id):
-        self._go("smart_home")
-        QTimer.singleShot(150, lambda: self.sv.view.focus_room(room_id))

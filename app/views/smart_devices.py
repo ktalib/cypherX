@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QInputDialog, QMessageBox
 )
 
+from app.home3d.inverter import ROLES as INVERTER_ROLES, INVERTER_IN, is_role
 from app.icons import get_pixmap
 from app.widgets.home.common import make_menu, hicon
 from app.views.smart_dashboard import _card, _action, _lbl, _chip_style
@@ -96,7 +97,7 @@ class DeviceCard(QFrame):
         kind = d.get("kind", "")
         icon = next((v for k, v in KIND_ICON.items() if k in kind), "plug")
         linked = d.get("linked_item")
-        self.icon.setPixmap(get_pixmap(icon, "#04131d" if online else SOFT, 18))
+        self.icon.setPixmap(get_pixmap(icon, "#1c0d02" if online else SOFT, 18))
         self.icon.setStyleSheet(f"background:{ACCENT if online else 'rgba(255,255,255,0.08)'};border-radius:17px;")
         self.name.setText(self.view.book.label(self.dev_id))
         self.sub.setText(f"{d.get('brand', '')} · {kind}")
@@ -126,6 +127,9 @@ class DeviceCard(QFrame):
             self.live.setText("  ·  ".join(bits))
             self.live.setStyleSheet(f"color:{GOOD if rd['on'] else SOFT};font-size:12px;font-weight:700;"
                                     "background:transparent;")
+        elif ok and err and linked == INVERTER_IN:
+            self.live.setText("Not answering — on the grid side that means a power cut (or a Wi-Fi problem)")
+            self.live.setStyleSheet(f"color:{WARN};font-size:11px;font-weight:600;background:transparent;")
         elif ok and err:
             self.live.setText("Not answering — check it's powered and on the Wi-Fi")
             self.live.setStyleSheet(f"color:{WARN};font-size:11px;font-weight:600;background:transparent;")
@@ -136,7 +140,7 @@ class DeviceCard(QFrame):
             self.live.setText(f"Can't control yet: {why}" if why else "")
             self.live.setStyleSheet(f"color:{MUTED};font-size:11px;font-weight:600;background:transparent;")
         is_on = bool(rd and rd.get("on"))
-        self.switch_btn.setVisible(ok and linked_now)
+        self.switch_btn.setVisible(ok and linked_now and not is_role(linked))
         self.switch_btn.setText("Turn off" if is_on else "Turn on")
         self.switch_btn.setStyleSheet(
             "QPushButton{background:rgba(255,255,255,0.08);color:#e2e8f0;border:1px solid rgba(255,255,255,0.16);"
@@ -144,6 +148,8 @@ class DeviceCard(QFrame):
             f"QPushButton{{background:{GOOD};color:#04140d;border:none;border-radius:14px;padding:5px 12px;"
             "font-weight:800;}")
         self.control.setText(d.get("control", "") if not ok else
+                             "Measures the inverter — CYPHER-X only reads this plug and never switches it."
+                             if is_role(linked) else
                              "Controlled by CYPHER-X — switching the appliance anywhere switches this plug.")
         self._filling = True
         self.link.clear()
@@ -154,7 +160,7 @@ class DeviceCard(QFrame):
         self.link.setCurrentIndex(max(0, idx))
         self._filling = False
         n = self.objectName()
-        border = "rgba(56,189,248,0.55)" if linked else "rgba(255,255,255,0.10)"
+        border = "rgba(255,122,26,0.55)" if linked else "rgba(255,255,255,0.10)"
         self.setStyleSheet(f"QFrame#{n}{{background:rgba(255,255,255,0.04);border:1px solid {border};"
                            f"border-radius:16px;}}")
 
@@ -232,7 +238,8 @@ class SmartDevicesView(QWidget):
 
     def _appliances(self):
         rooms = {r["id"]: r["name"] for r in self.home.model.rooms}
-        return [(d["id"], f"{d['name']} ({rooms.get(d['room'], '')})")
+        return [(role, f"⚡ {label}") for role, label in INVERTER_ROLES.items()] + \
+               [(d["id"], f"{d['name']} ({rooms.get(d['room'], '')})")
                 for d in sorted(self.home.model.devices(), key=lambda d: (d["room"], d["name"]))]
 
     def refresh(self):
@@ -377,6 +384,8 @@ class SmartDevicesView(QWidget):
     def link(self, dev_id, item_id):
         self.book.link(dev_id, item_id)
         it = self.home.model.item(item_id) if item_id else None
+        if is_role(item_id):
+            it = {"name": INVERTER_ROLES[item_id]}
         try:
             from app.database import Database
             Database.get_instance().log_operation(

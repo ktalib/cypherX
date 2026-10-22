@@ -48,6 +48,7 @@ class HomeApi:
         load = m.load_w()
         names = {r["id"]: r["name"] for r in m.rooms}
         out = e.open_outage()
+        inv = getattr(self.w, "inverter", None)
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         latest = next((ev for ev in reversed(cctv.store.events) if ev.get("snapshot")), None)
         return {
@@ -57,8 +58,12 @@ class HomeApi:
                 "load_w": load, "inverter_w": pw.get("inverter_w", 3000), "source": pw.get("source", "Grid"),
                 "battery_pct": pw.get("battery_pct", 100), "runtime_h": m.runtime_hours(),
                 "per_hour": load / 1000 * price, "per_day": m.daily_kwh() * price,
+                "measured": inv is not None and inv.load_w() is not None,
+                "charging_w": inv.charging_w() if inv is not None else None,
             },
-            "grid": {"watching": e.grid_detect, "off_since": out["start"] if out else None,
+            "grid": {"watching": home.grid_watching(),
+                     "week": [{"day": d.strftime("%a"), "date": d.strftime("%d %b"), "hours": round(h, 2)}
+                              for d, h in e.daily_outage_hours(7)], "off_since": out["start"] if out else None,
                      "cuts_24h_h": round(e.outage_hours(time.time() - 86400), 2)},
             "meter": {"units_left": e.units_left(), "days_left": e.days_left(), "kwh_per_day": e.burn_rate(),
                       "price": e.price_per_kwh()},
@@ -67,6 +72,7 @@ class HomeApi:
                          "kind": d.get("kind"), "watts": d["device"]["watts"], "on": d["device"]["on"],
                          "live_w": m.live_w(d["id"])}
                         for d in sorted(m.devices(), key=lambda d: (d["room"], d["name"]))],
+            "weather": getattr(getattr(self.w, "weather", None), "now", None),
             "security": {
                 "armed": bool(cctv.store.config.get("armed")),
                 "cameras": [{"id": cid, "name": f.cam["name"], "live": f.running, "source": f.cam["source"]}

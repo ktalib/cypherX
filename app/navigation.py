@@ -109,7 +109,7 @@ _NAV_BTN_QSS = """
         font-weight: 600;
     }
 """
-_HOME_RGB, _SERVER_RGB = "56, 189, 248", "34, 197, 94"
+_HOME_RGB, _SERVER_RGB = "255, 122, 26", "34, 197, 94"   # warm orange home, green server
 
 _GROUP_QSS = """
     QPushButton#nav-group {
@@ -267,9 +267,9 @@ class NavigationSidebar(QFrame):
         self.home_btn.setStyleSheet("""
             QPushButton#nav-home {
                 text-align: left; padding: 9px 12px; border-radius: 10px; border: none;
-                background: #38bdf8; color: #04131d; font-size: 12px; font-weight: 800;
+                background: #ff7a1a; color: #1c0d02; font-size: 12px; font-weight: 800;
             }
-            QPushButton#nav-home:hover { background: #7dd3fc; }
+            QPushButton#nav-home:hover { background: #ffa25c; }
         """)
         self.home_btn.clicked.connect(lambda: self.home_requested.emit())
         main_layout.addWidget(self.home_btn)
@@ -319,7 +319,7 @@ class NavigationSidebar(QFrame):
     def set_mode(self, mode):
         self.mode = mode
         server = mode == SERVER_MODE
-        accent = "#22c55e" if server else "#38bdf8"
+        accent = "#22c55e" if server else "#ff7a1a"
         rgb = _SERVER_RGB if server else _HOME_RGB
         self.brand_icon.setPixmap(get_pixmap("hard_drive" if server else "widgets", accent, 18))
         self.nav_title.setText("SERVER" if server else "CYPHER-X")
@@ -397,7 +397,7 @@ class NavigationSidebar(QFrame):
         self.module_selected.emit(index, module_id)
 
     def _set_active_button(self, index: int):
-        accent = "#22c55e" if self.mode == SERVER_MODE else "#38bdf8"
+        accent = "#22c55e" if self.mode == SERVER_MODE else "#ff7a1a"
         for i, btn in enumerate(self.buttons):
             is_active = (i == index)
             btn.setProperty("active", "true" if is_active else "false")
