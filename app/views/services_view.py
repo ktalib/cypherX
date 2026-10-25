@@ -347,3 +347,5 @@ class ServicesView(QWidget):
                      for ts, lvl, msg in list(svc.logs)[-200:]]
             self.log_view.setPlainText("\n".join(lines))
             self.log_view.verticalScrollBar().setValue(self.log_view.verticalScrollBar().maximum())
+
+

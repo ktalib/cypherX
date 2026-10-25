@@ -22,6 +22,7 @@ from app.widgets.home.common import (
     GlassCard, label, icon_button, hicon, hpix, make_menu, fmt_ms,
     load_setting, save_setting, TEXT, MUTED, DIM
 )
+from app.services.spotify_service import SpotifyConnect
 
 try:
     from PySide6.QtMultimedia import (
@@ -159,6 +160,19 @@ class MusicPlayerWidget(GlassCard):
         self._coeffs_key = None
         self._coeffs = []
         self._buf_tick = 0
+        self.spotify = SpotifyConnect(self)
+        self.spotify.connected.connect(self._on_spotify_connected)
+        self.spotify.error.connect(self._on_spotify_error)
+        self._spotify_mode = False
+        self._spotify_playing = False
+        self._spotify_duration = 0
+        self._spotify_poll = QTimer(self)
+        self._spotify_poll.setInterval(5000)
+        self._spotify_poll.timeout.connect(self._poll_spotify)
+        self._spotify_volume_timer = QTimer(self)
+        self._spotify_volume_timer.setSingleShot(True)
+        self._spotify_volume_timer.setInterval(250)
+        self._spotify_volume_timer.timeout.connect(self._send_spotify_volume)
 
         self.player = None
         if HAS_MULTIMEDIA:
@@ -369,6 +383,10 @@ class MusicPlayerWidget(GlassCard):
             self._sync_mode_buttons()
 
     def clear_queue(self):
+        if self._spotify_mode:
+            self.spotify.pause()
+            self._spotify_mode = False
+            self._spotify_poll.stop()
         if self.player:
             self.player.stop()
             self.player.setSource(QUrl())
@@ -392,6 +410,13 @@ class MusicPlayerWidget(GlassCard):
         menu.addAction(hicon("music", "#e2e8f0", 14), "Open files…", self.open_files)
         menu.addAction(hicon("folder", "#e2e8f0", 14), "Open folder…", self.open_folder)
         menu.addAction(hicon("link", "#e2e8f0", 14), "Play stream URL…", self.open_url)
+        menu.addSeparator()
+        menu.addAction("Set Spotify Client ID…", self._configure_spotify)
+        menu.addAction("Connect Spotify…", self._connect_spotify)
+        spotify_play = menu.addAction("Play Spotify link…", self._play_spotify_link)
+        spotify_play.setEnabled(self.spotify.is_connected)
+        if self.spotify.is_connected:
+            menu.addAction("Disconnect Spotify", self._disconnect_spotify)
         if self.playlist:
             menu.addSeparator()
             start = max(0, min(self.index - 5, len(self.playlist) - 15))
@@ -425,6 +450,13 @@ class MusicPlayerWidget(GlassCard):
     def _load(self, i: int, autoplay=True):
         if not self.player or not self.playlist:
             return
+        if self._spotify_mode:
+            self.spotify.pause()
+            self._spotify_mode = False
+            self._spotify_poll.stop()
+            self.volume = self._vol.value()
+            self.audio.setVolume(self.volume / 100)
+            save_setting("music_volume", self.volume)
         self.index = i % len(self.playlist)
         src = self.playlist[self.index]
         self._duration = 0
@@ -448,6 +480,10 @@ class MusicPlayerWidget(GlassCard):
         return None
 
     def toggle_play(self):
+        if self._spotify_mode:
+            command = self.spotify.pause if self._spotify_playing else self.spotify.resume
+            command(callback=lambda ok: self._poll_spotify() if ok else None)
+            return
         if not self.player:
             return
         if not self.playlist:
@@ -462,6 +498,9 @@ class MusicPlayerWidget(GlassCard):
                 self.player.play()
 
     def next(self, auto=False):
+        if self._spotify_mode:
+            self.spotify.next(callback=lambda ok: QTimer.singleShot(700, self._poll_spotify) if ok else None)
+            return
         if not self.player or not self.playlist:
             return
         if self.shuffle and len(self.playlist) > 1:
@@ -476,6 +515,9 @@ class MusicPlayerWidget(GlassCard):
         self._load(i, autoplay=True)
 
     def previous(self):
+        if self._spotify_mode:
+            self.spotify.previous(callback=lambda ok: QTimer.singleShot(700, self._poll_spotify) if ok else None)
+            return
         if not self.player or not self.playlist:
             return
         if self.player.position() > 3000:
@@ -494,15 +536,24 @@ class MusicPlayerWidget(GlassCard):
         self._sync_mode_buttons()
 
     def _on_volume(self, v):
-        self.volume = v
-        if self.player:
+        if self._spotify_mode:
+            self._spotify_volume_timer.start()
+        else:
+            self.volume = v
+        if self.player and not self._spotify_mode:
             self.audio.setVolume(v / 100)
             if self.muted and v > 0:
                 self._toggle_mute()
-        save_setting("music_volume", v)
+        if not self._spotify_mode:
+            save_setting("music_volume", v)
         self._update_vol_icon()
 
     def _toggle_mute(self):
+        if self._spotify_mode:
+            self.muted = not self.muted
+            self._schedule_spotify_volume()
+            self._update_vol_icon()
+            return
         if not self.player:
             return
         self.muted = not self.muted
@@ -516,26 +567,39 @@ class MusicPlayerWidget(GlassCard):
     # ---- scrubbing ----
 
     def _on_scrub_move(self, v):
-        if self._duration > 0:
-            self._pos_lbl.setText(fmt_ms(v * self._duration / 1000))
+        duration = self._spotify_duration if self._spotify_mode else self._duration
+        if duration > 0:
+            self._pos_lbl.setText(fmt_ms(v * duration / 1000))
 
     def _on_scrub_release(self):
+        if self._spotify_mode and self._spotify_duration > 0:
+            self.spotify.seek(
+                int(self._scrubber.value() * self._spotify_duration / 1000),
+                callback=lambda ok: self._poll_spotify() if ok else None
+            )
+            return
         if self.player and self._duration > 0:
             self.player.setPosition(int(self._scrubber.value() * self._duration / 1000))
 
     # ------------------------------------------------------ player signals --
 
     def _on_position(self, ms):
+        if self._spotify_mode:
+            return
         if not self._scrubber.isSliderDown():
             if self._duration > 0:
                 self._scrubber.setValue(int(ms * 1000 / self._duration))
             self._pos_lbl.setText(fmt_ms(ms))
 
     def _on_duration(self, ms):
+        if self._spotify_mode:
+            return
         self._duration = ms
         self._dur_lbl.setText(fmt_ms(ms) if ms > 0 else "LIVE")
 
     def _on_state(self, state):
+        if self._spotify_mode:
+            return
         playing = state == QMediaPlayer.PlayingState
         self._play_btn.setIcon(hicon("pause" if playing else "play", "#0b1116", 16))
         self._bars.playing = playing
@@ -627,6 +691,113 @@ class MusicPlayerWidget(GlassCard):
             self._bars.live = False
 
     def shutdown(self):
+        self._spotify_poll.stop()
+        self._spotify_volume_timer.stop()
         if self.player:
             save_setting("music_index", self.index)
             self.player.stop()
+
+    def _configure_spotify(self):
+        current = load_setting("spotify_client_id", "")
+        client_id, ok = QInputDialog.getText(
+            self, "Spotify setup", "Spotify Developer app Client ID:", text=current
+        )
+        if ok:
+            save_setting("spotify_client_id", client_id.strip())
+
+    def _connect_spotify(self):
+        client_id = load_setting("spotify_client_id", "")
+        if not client_id:
+            self._configure_spotify()
+            client_id = load_setting("spotify_client_id", "")
+        if client_id:
+            self.spotify.authorize(client_id)
+
+    def _play_spotify_link(self):
+        if not self.spotify.is_connected:
+            self.message.emit("Connect Spotify first.")
+            return
+        value, ok = QInputDialog.getText(
+            self, "Play Spotify", "Spotify track, album, artist, or playlist link / URI:"
+        )
+        if ok and value.strip():
+            self.spotify.play_uri(value, self._spotify_started)
+
+    def _spotify_started(self, ok):
+        if not ok:
+            return
+        self._spotify_mode = True
+        self._spotify_playing = True
+        self._spotify_duration = 0
+        if self.player:
+            self.player.stop()
+        self._title.setText("Spotify")
+        self._artist.setText("Loading playback…")
+        self._spotify_poll.start()
+        QTimer.singleShot(700, self._poll_spotify)
+
+    def _on_spotify_connected(self):
+        self.message.emit("Spotify connected.")
+
+    def _on_spotify_error(self, text):
+        self.message.emit(text)
+        if self._spotify_mode:
+            self._artist.setText(text)
+
+    def _disconnect_spotify(self):
+        self._spotify_poll.stop()
+        self.spotify.disconnect()
+        self._spotify_mode = False
+        self._spotify_playing = False
+        self._title.setText("Nothing playing")
+        self._artist.setText("Spotify disconnected")
+        self._spotify_duration = 0
+        self._sync_mode_buttons()
+
+    def _poll_spotify(self):
+        if self._spotify_mode:
+            self.spotify.playback_state(self._handle_spotify_playback)
+
+    def _handle_spotify_playback(self, data, error):
+        if error:
+            self._on_spotify_error(error)
+            return
+        item = data.get("item") or {}
+        self._spotify_playing = bool(data.get("is_playing"))
+        self._play_btn.setIcon(hicon("pause" if self._spotify_playing else "play", "#0b1116", 16))
+        self._bars.playing = self._spotify_playing
+        self._bars.live = False
+        if not item:
+            self._title.setText("Spotify")
+            self._artist.setText("No active Spotify playback device")
+            self._spotify_duration = 0
+            self._scrubber.setValue(0)
+            self._pos_lbl.setText("0:00")
+            self._dur_lbl.setText("0:00")
+            return
+        self._title.setText(item.get("name") or "Spotify")
+        artists = ", ".join(
+            artist.get("name", "") for artist in item.get("artists", []) if artist.get("name")
+        )
+        album = (item.get("album") or {}).get("name", "")
+        self._artist.setText(" — ".join(part for part in (artists, album) if part) or "Spotify")
+        duration = int(item.get("duration_ms") or 0)
+        progress = int(data.get("progress_ms") or 0)
+        self._spotify_duration = duration
+        self._dur_lbl.setText(fmt_ms(duration) if duration else "0:00")
+        self._pos_lbl.setText(fmt_ms(progress))
+        if not self._scrubber.isSliderDown():
+            self._scrubber.setValue(int(progress * 1000 / duration) if duration else 0)
+        device = data.get("device") or {}
+        volume = device.get("volume_percent")
+        if volume is not None and not self.muted and not self._vol.isSliderDown():
+            self._vol.blockSignals(True)
+            self._vol.setValue(int(volume))
+            self._vol.blockSignals(False)
+
+    def _schedule_spotify_volume(self):
+        self._spotify_volume_timer.start()
+
+    def _send_spotify_volume(self):
+        value = 0 if self.muted else self._vol.value()
+        self.spotify.set_volume(value)

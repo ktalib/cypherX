@@ -15,16 +15,16 @@ import time
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer, QRectF, QPointF, Signal, QSize
-from PySide6.QtGui import (QPainter, QColor, QPen, QFont, QFontMetrics, QPainterPath, QLinearGradient, QPixmap,
-                           QRegion, QImage)
+from PySide6.QtGui import (QPainter, QColor, QPen, QFont, QFontMetrics, QPainterPath, QLinearGradient,
+                           QRegion)
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QFrame,
-    QScrollArea, QSizePolicy, QToolTip, QButtonGroup
+    QScrollArea, QSizePolicy, QToolTip, QComboBox, QTabWidget
 )
 
 from app.icons import get_icon, get_pixmap
 from app.views.home_ui import (ACCENT, ACCENT_HI, ON_ACCENT, GOOD, WARN, CRIT, TEXT, SOFT, MUTED, DIM, TRACK,
-                               GLASS, Toggle, ArcDial, WeekBars, Clickable, pill_style, glass_style, rgba,
+                               GLASS, Toggle, ArcDial, WeekBars, pill_style, glass_style, rgba,
                                apply_home_style)
 
 REFRESH_MS = 2000
@@ -111,21 +111,93 @@ def _round_btn(icon, tip, slot, danger=False, size=38):
     return b
 
 
-def rounded_pixmap(src, w, h, radius=16):
-    """Fill w×h with the picture (cropped, centred) and round the corners."""
-    out = QPixmap(max(1, w), max(1, h))
-    out.fill(Qt.transparent)
-    if src.isNull():
-        return out
-    scaled = src.scaled(w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-    p = QPainter(out)
-    p.setRenderHint(QPainter.Antialiasing)
-    path = QPainterPath()
-    path.addRoundedRect(QRectF(0, 0, w, h), radius, radius)
-    p.setClipPath(path)
-    p.drawPixmap(int((w - scaled.width()) / 2), int((h - scaled.height()) / 2), scaled)
-    p.end()
-    return out
+class SquareCameraPreview(QWidget):
+    def __init__(self, feed, parent=None):
+        super().__init__(parent)
+        self.feed = feed
+        self.setFixedSize(240, 240)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        feed.frame_ready.connect(self.update)
+        feed.state_changed.connect(self.update)
+
+    def sizeHint(self):
+        return QSize(240, 240)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        rect = self.rect()
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(rect), 16, 16)
+        p.setClipPath(path)
+        p.fillRect(rect, QColor("#0c0b0a"))
+        image = self.feed.image
+        if self.feed.running and image is not None and not image.isNull():
+            side = max(rect.width(), rect.height())
+            cropped = image.scaled(side, side, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            p.drawImage(QRectF((rect.width() - cropped.width()) / 2,
+                               (rect.height() - cropped.height()) / 2,
+                               cropped.width(), cropped.height()), cropped)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(GOOD))
+            p.drawEllipse(12, 12, 8, 8)
+            p.setPen(QColor(TEXT))
+            p.drawText(QRectF(25, 7, rect.width() - 34, 20), Qt.AlignLeft | Qt.AlignVCenter, "LIVE")
+        else:
+            p.setPen(QColor(MUTED))
+            status = self.feed.status if self.feed.running else "Camera off"
+            p.drawText(rect.adjusted(12, 12, -12, -12), Qt.AlignCenter | Qt.TextWordWrap, status)
+        p.end()
+
+
+class DashboardCameraTile(QFrame):
+    def __init__(self, view, feed, parent=None):
+        super().__init__(parent)
+        self.view = view
+        self.feed = feed
+        self.setObjectName("panel")
+        self.setMinimumWidth(300)
+        self.setMaximumWidth(350)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        lo = QVBoxLayout(self)
+        lo.setContentsMargins(12, 12, 12, 12)
+        lo.setSpacing(9)
+        head = QHBoxLayout()
+        self.name = _lbl(feed.cam.get("name", "Camera"), TEXT, 13, 700)
+        self.name.setToolTip(feed.cam.get("name", "Camera"))
+        head.addWidget(_bubble("video", 30))
+        head.addWidget(self.name, 1)
+        lo.addLayout(head)
+        preview_row = QHBoxLayout()
+        preview_row.addStretch()
+        self.preview = SquareCameraPreview(feed)
+        self.preview.setToolTip("Double-click to open the CCTV page")
+        preview_row.addWidget(self.preview)
+        preview_row.addStretch()
+        lo.addLayout(preview_row)
+        controls = QHBoxLayout()
+        self.power = _action("Start", "play", self._toggle_power)
+        self.snapshot = _action("Snapshot", "camera", lambda: self.view.manual_snapshot(self.feed))
+        controls.addWidget(self.power, 1)
+        controls.addWidget(self.snapshot, 1)
+        lo.addLayout(controls)
+        self.preview.mouseDoubleClickEvent = lambda _event: self.view.window().navigate_by_id("cctv")
+        self.sync()
+
+    def sync(self):
+        running = self.feed.running
+        self.power.setText(" Stop" if running else " Start")
+        self.power.setIcon(get_icon("power" if running else "play", TEXT, 13))
+        self.snapshot.setEnabled(running and self.feed.image is not None and not self.feed.image.isNull())
+        self.name.setToolTip(f"{self.feed.cam.get('name', 'Camera')} · {self.feed.status}")
+
+    def _toggle_power(self):
+        if self.feed.running:
+            self.view.stop_camera(self.feed)
+        else:
+            self.view.start_camera(self.feed)
+        self.sync()
 
 
 # --------------------------------------------------------------- painted parts --
@@ -491,6 +563,7 @@ class HeroHouse(QWidget):
         self.view = House3DView(model)
         self.view.setMinimumSize(320, 300)
         self.view.use_warm_theme()
+        self.view.show_device_labels = False
         lo.addWidget(self.view)
 
     def resizeEvent(self, e):
@@ -541,8 +614,10 @@ class SmartDashboardView(QWidget):
         self.rows = {}
         self._row_ids = None
         self._room = "all"
-        self._cam_index = 0
-        self._snap_key = None
+        self._camera_tiles = {}
+        self._camera_ids = None
+        self._camera_columns = 0
+        self._camera_empty = None
         self._house_sig = None
         self._build()
         apply_home_style(self)
@@ -555,20 +630,8 @@ class SmartDashboardView(QWidget):
 
     def _build(self):
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea{background:transparent;}")
-        page = QWidget()
-        page.setStyleSheet("background:transparent;")
-        scroll.setWidget(page)
-        outer.addWidget(scroll)
-        self.grid = QGridLayout(page)
-        self.grid.setContentsMargins(22, 20, 22, 22)
-        self.grid.setHorizontalSpacing(16)
-        self.grid.setVerticalSpacing(16)
+        outer.setContentsMargins(18, 14, 18, 14)
+        outer.setSpacing(12)
 
         self.header = self._build_header()
         self.hero = self._build_hero()
@@ -579,52 +642,81 @@ class SmartDashboardView(QWidget):
         self.card_meter = self._build_meter()
         self.card_fridge = self._build_fridge()
         self.card_energy = self._build_energy()
-        self._mode = None
-        self._place("wide")
+        self.tabs = QTabWidget()
+        self.tabs.setObjectName("dashboard_tabs")
+        self.tabs.setDocumentMode(True)
+        self.tabs.setStyleSheet(
+            "QTabWidget#dashboard_tabs::pane{border:1px solid rgba(255,255,255,0.08);"
+            "border-radius:16px;background:rgba(18,16,15,0.55);top:-1px;}"
+            "QTabWidget#dashboard_tabs QTabBar::tab{background:rgba(255,255,255,0.05);"
+            f"color:{SOFT};border:1px solid rgba(255,255,255,0.07);border-bottom:none;"
+            "padding:9px 18px;margin-right:5px;border-top-left-radius:10px;border-top-right-radius:10px;"
+            "font-weight:600;min-width:78px;}"
+            f"QTabWidget#dashboard_tabs QTabBar::tab:selected{{background:{rgba(ACCENT, 0.18)};"
+            f"color:{TEXT};border-color:{rgba(ACCENT, 0.55)};}}"
+            "QTabWidget#dashboard_tabs QTabBar::tab:hover{background:rgba(255,255,255,0.10);}"
+        )
+        self.tabs.addTab(self._single_card_page(self.card_rooms), get_icon("home", TEXT, 15), "Devices")
+        self.tabs.addTab(self._single_card_page(self.card_power), get_icon("zap", TEXT, 15), "Power")
+        self.tabs.addTab(self.card_cam, get_icon("video", TEXT, 15), "Cameras")
+        self.tabs.addTab(self._scroll_page(self._energy_page()), get_icon("activity", TEXT, 15), "Energy")
+        self.tabs.currentChanged.connect(lambda _index: QTimer.singleShot(0, self._layout_camera_tiles))
+        outer.addWidget(self.header)
+        outer.addWidget(self.hero, 2)
+        outer.addWidget(self.tabs, 3)
+        self.hero.setMinimumHeight(270)
+        self.hero.setMaximumHeight(370)
+        self._set_header_layout()
 
-    def _place(self, mode):
-        """wide: 3 columns · medium: 2 · narrow: 1."""
-        if mode == self._mode:
-            return
-        self._mode = mode
-        g = self.grid
-        while g.count():
-            g.takeAt(0)
-        for c in range(3):
-            g.setColumnStretch(c, 0)
-        for r in range(16):
-            g.setRowStretch(r, 0)
-        cards = (self.card_power, self.card_cam, self.card_week, self.card_meter, self.card_fridge, self.card_energy)
-        if mode == "wide":
-            g.addWidget(self.header, 0, 0, 1, 3)
-            g.addWidget(self.hero, 1, 0, 1, 2)
-            g.addWidget(self.card_rooms, 1, 2)
-            for i, c in enumerate(cards):
-                g.addWidget(c, 2 + i // 3, i % 3)
-            cols, last = 3, 4
-        elif mode == "medium":
-            g.addWidget(self.header, 0, 0, 1, 2)
-            g.addWidget(self.hero, 1, 0, 1, 2)
-            seq = (self.card_rooms, *cards)
-            for i, c in enumerate(seq[:-1]):
-                g.addWidget(c, 2 + i // 2, i % 2)
-            g.addWidget(seq[-1], 2 + (len(seq) - 1) // 2, 0, 1, 2)
-            cols, last = 2, 7
-        else:
-            for i, w in enumerate((self.header, self.hero, self.card_rooms, *cards)):
-                g.addWidget(w, i, 0)
-            cols, last = 1, 10
-        for c in range(cols):
-            g.setColumnStretch(c, 1)
-        g.setRowStretch(last, 1)
-        self.hero.setMinimumHeight(430 if mode == "wide" else 360)
-        self.header_lo.setDirection(QHBoxLayout.LeftToRight if mode == "wide" else QHBoxLayout.TopToBottom)
-        self.header_lo.setAlignment(self.header_right, Qt.AlignVCenter if mode == "wide" else Qt.AlignLeft)
+    @staticmethod
+    def _scroll_page(content):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea{background:transparent;border:none;}")
+        scroll.setWidget(content)
+        return scroll
+
+    @classmethod
+    def _single_card_page(cls, card):
+        page = QWidget()
+        page.setStyleSheet("background:transparent;")
+        lo = QVBoxLayout(page)
+        lo.setContentsMargins(10, 10, 10, 10)
+        lo.addWidget(card)
+        return cls._scroll_page(page)
+
+    def _energy_page(self):
+        page = QWidget()
+        page.setStyleSheet("background:transparent;")
+        grid = QGridLayout(page)
+        grid.setContentsMargins(10, 10, 10, 10)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(10)
+        for index, card in enumerate((self.card_week, self.card_meter, self.card_fridge, self.card_energy)):
+            grid.addWidget(card, index // 2, index % 2)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setRowStretch(0, 1)
+        grid.setRowStretch(1, 1)
+        return page
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
-        w = self.width()
-        self._place("wide" if w >= 1000 else "medium" if w >= 700 else "narrow")
+        self._set_header_layout()
+        self._layout_camera_tiles()
+
+    def _layout_camera_tiles(self):
+        if hasattr(self, "camera_grid"):
+            self._sync_camera_grid(list(self.cv.feeds.values()))
+
+    def _set_header_layout(self):
+        if not hasattr(self, "header_lo"):
+            return
+        wide = self.width() >= 1050
+        self.header_lo.setDirection(QHBoxLayout.LeftToRight if wide else QHBoxLayout.TopToBottom)
+        self.header_lo.setAlignment(self.header_right, Qt.AlignVCenter if wide else Qt.AlignLeft)
 
     # header ------------------------------------------------------------------
 
@@ -695,10 +787,10 @@ class SmartDashboardView(QWidget):
         bottom.setStyleSheet("background:transparent;")
         bl = QHBoxLayout(bottom)
         bl.setContentsMargins(18, 14, 18, 16)
-        hint = QLabel("Drag to turn  ·  click an appliance to switch it")
+        bl.addStretch()
+        hint = QLabel("Drag to rotate  ·  hover for details  ·  click an appliance to switch it")
         hint.setStyleSheet(f"{glass_style(12)}padding:5px 10px;font-size:11px;color:{SOFT};")
         bl.addWidget(hint)
-        bl.addStretch()
         open3d = QPushButton(" Open 3D")
         open3d.setIcon(get_icon("maximize", TEXT, 13))
         open3d.setCursor(Qt.PointingHandCursor)
@@ -715,33 +807,39 @@ class SmartDashboardView(QWidget):
         card, lo, head = _card("Rooms", "home")
         self.rooms_count = _lbl("", MUTED, 11, 600)
         head.addWidget(self.rooms_count)
-        self.chips = QHBoxLayout()
-        self.chips.setSpacing(6)
-        self.chip_group = QButtonGroup(self)
-        self.chip_group.setExclusive(True)
-        self.chip_btns = {}
-        lo.addLayout(self.chips)
-        self.rows_lo = QVBoxLayout()
+        self.room_filter = QComboBox()
+        self.room_filter.setAccessibleName("Filter appliances by room")
+        self.room_filter.setToolTip("Show all appliances or filter by room")
+        self.room_filter.setMinimumHeight(36)
+        self.room_filter.currentIndexChanged.connect(
+            lambda index: self._pick_room(self.room_filter.itemData(index))
+            if index >= 0 and self.room_filter.itemData(index) else None
+        )
+        lo.addWidget(self.room_filter)
+        self.device_scroll = QScrollArea()
+        self.device_scroll.setWidgetResizable(True)
+        self.device_scroll.setFrameShape(QFrame.NoFrame)
+        self.device_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.device_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.device_scroll.setMinimumHeight(150)
+        self.device_scroll.setMaximumHeight(270)
+        self.device_scroll.setStyleSheet(
+            "QScrollArea{background:transparent;border:none;}"
+            "QScrollBar:vertical{background:transparent;width:7px;margin:2px;}"
+            "QScrollBar::handle:vertical{background:rgba(255,255,255,0.20);border-radius:3px;min-height:28px;}"
+            "QScrollBar::add-line,QScrollBar::sub-line{height:0;}"
+        )
+        device_list = QWidget()
+        device_list.setStyleSheet("background:transparent;")
+        self.rows_lo = QVBoxLayout(device_list)
+        self.rows_lo.setContentsMargins(0, 0, 4, 0)
         self.rows_lo.setSpacing(6)
-        lo.addLayout(self.rows_lo)
-        lo.addStretch()
+        self.device_scroll.setWidget(device_list)
+        lo.addWidget(self.device_scroll, 1)
         self.rooms_note = _lbl("", DIM, 11, 500)
         self.rooms_note.setWordWrap(True)
         lo.addWidget(self.rooms_note)
         return card
-
-    def _chip_btn(self, key, text):
-        b = QPushButton(text)
-        b.setCheckable(True)
-        b.setCursor(Qt.PointingHandCursor)
-        b.setFixedHeight(30)
-        b.setStyleSheet(f"QPushButton{{background:rgba(255,255,255,0.06);color:{SOFT};border:none;"
-                        f"border-radius:15px;padding:0 14px;font-weight:600;}}"
-                        f"QPushButton:hover{{background:rgba(255,255,255,0.11);}}"
-                        f"QPushButton:checked{{background:{ACCENT};color:{ON_ACCENT};font-weight:800;}}")
-        b.clicked.connect(lambda _=False, k=key: self._pick_room(k))
-        self.chip_group.addButton(b)
-        return b
 
     # power, camera, week ------------------------------------------------------------
 
@@ -774,48 +872,34 @@ class SmartDashboardView(QWidget):
         return card
 
     def _build_camera(self):
-        card, lo, head = _card("Camera", "video")
-        self.cam_name = _lbl("", MUTED, 11, 600)
-        head.addWidget(self.cam_name)
-        prev_b = _round_btn("chevron_left", "Previous camera", lambda: self._cycle_cam(-1), size=28)
-        next_b = _round_btn("chevron_right", "Next camera", lambda: self._cycle_cam(1), size=28)
-        head.addWidget(prev_b)
-        head.addWidget(next_b)
-        self.cam_nav = (prev_b, next_b)
-        holder = QWidget()
-        hg = QGridLayout(holder)
-        hg.setContentsMargins(0, 0, 0, 0)
-        self.cam_img = QLabel()
-        self.cam_img.setMinimumHeight(180)
-        self.cam_img.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
-        self.cam_img.setAlignment(Qt.AlignCenter)
-        self.cam_img.setStyleSheet(f"background:#0c0b0a;border-radius:16px;color:{DIM};font-size:12px;")
-        hg.addWidget(self.cam_img, 0, 0)
-        self.cam_badge = QLabel()
-        badge_box = QWidget()
-        badge_box.setStyleSheet("background:transparent;")
-        bb = QHBoxLayout(badge_box)
-        bb.setContentsMargins(10, 10, 10, 10)
-        bb.addWidget(self.cam_badge)
-        hg.addWidget(badge_box, 0, 0, Qt.AlignTop | Qt.AlignLeft)
-        ctl = QWidget()
-        ctl.setStyleSheet("background:transparent;")
-        cl = QHBoxLayout(ctl)
-        cl.setContentsMargins(10, 10, 10, 12)
-        cl.setSpacing(8)
-        cl.addStretch()
-        cl.addWidget(_round_btn("camera", "Take a snapshot", self._snapshot))
-        self.cam_arm = _round_btn("shield", "Arm / disarm motion alerts", self._toggle_arm)
-        cl.addWidget(self.cam_arm)
-        cl.addWidget(_round_btn("maximize", "Open CCTV", lambda: self._go("cctv")))
-        self.cam_power = _round_btn("power", "Start / stop this camera", self._cam_power, danger=True)
-        cl.addWidget(self.cam_power)
-        cl.addStretch()
-        hg.addWidget(ctl, 0, 0, Qt.AlignBottom)
-        lo.addWidget(holder, 1)
-        self.cam_line = _lbl("", MUTED, 11, 500)
-        lo.addWidget(self.cam_line)
-        return card
+        page = QWidget()
+        page.setStyleSheet("background:transparent;")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+        toolbar = QHBoxLayout()
+        self.cam_line = _lbl("Your cameras appear here as square tiles.", MUTED, 11, 500)
+        toolbar.addWidget(self.cam_line, 1)
+        self.cam_arm = _action("Arm alerts", "shield", self._toggle_arm)
+        toolbar.addWidget(self.cam_arm)
+        toolbar.addWidget(_action("Open CCTV", "maximize", lambda: self._go("cctv")))
+        layout.addLayout(toolbar)
+
+        self.camera_scroll = QScrollArea()
+        self.camera_scroll.setWidgetResizable(True)
+        self.camera_scroll.setFrameShape(QFrame.NoFrame)
+        self.camera_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.camera_scroll.setStyleSheet("QScrollArea{background:transparent;border:none;}")
+        self.camera_grid_host = QWidget()
+        self.camera_grid_host.setStyleSheet("background:transparent;")
+        self.camera_grid_host.setMinimumSize(0, 0)
+        self.camera_grid = QGridLayout(self.camera_grid_host)
+        self.camera_grid.setContentsMargins(0, 0, 6, 0)
+        self.camera_grid.setHorizontalSpacing(12)
+        self.camera_grid.setVerticalSpacing(12)
+        self.camera_scroll.setWidget(self.camera_grid_host)
+        layout.addWidget(self.camera_scroll, 1)
+        return page
 
     def _build_week(self):
         card, lo, head = _card("Power cuts this week", "activity")
@@ -992,20 +1076,19 @@ class SmartDashboardView(QWidget):
 
     def _refresh_rooms(self, m):
         names = {r["id"]: r["name"] for r in m.rooms}
-        keys = ["all"] + [r["id"] for r in m.rooms]
-        if list(self.chip_btns) != keys:
-            for b in self.chip_btns.values():
-                self.chip_group.removeButton(b)
-                b.setParent(None)
-            self.chip_btns = {}
-            for k in keys:
-                b = self._chip_btn(k, "All" if k == "all" else names[k])
-                self.chip_btns[k] = b
-                self.chips.addWidget(b)
-            self.chips.addStretch()
-            if self._room not in self.chip_btns:
+        keys = [("all", "All rooms")] + [(r["id"], r["name"]) for r in m.rooms]
+        current_keys = [self.room_filter.itemData(i) for i in range(self.room_filter.count())]
+        if current_keys != [key for key, _ in keys]:
+            self.room_filter.blockSignals(True)
+            self.room_filter.clear()
+            for key, name in keys:
+                self.room_filter.addItem(name, key)
+            self.room_filter.blockSignals(False)
+            if self._room not in dict(keys):
                 self._room = "all"
-        self.chip_btns[self._room].setChecked(True)
+        self.room_filter.blockSignals(True)
+        self.room_filter.setCurrentIndex(self.room_filter.findData(self._room))
+        self.room_filter.blockSignals(False)
         devices = sorted(m.devices() if self._room == "all" else m.devices(self._room),
                          key=lambda d: (not d["device"]["on"], d["room"], d["name"]))
         ids = [d["id"] for d in devices]
@@ -1033,47 +1116,62 @@ class SmartDashboardView(QWidget):
         self.rooms_note.setText(f"{names.get(self._room, 'The house')} is drawing {room_w:,.0f} W."
                                 if room_w else "Everything here is off.")
 
-    def _feeds_with_picture(self):
-        return [f for f in self.cv.feeds.values() if f.running and f.image is not None and not f.image.isNull()]
-
     def _refresh_camera(self, armed):
-        store = self.cv.store
-        self.cam_arm.setIcon(get_icon("shield" if armed else "unlock", GOOD if armed else "#e7e5e4", 16))
-        live = self._feeds_with_picture()
+        self.cam_arm.setText("Disarm alerts" if armed else "Arm alerts")
+        self.cam_arm.setIcon(get_icon("shield" if armed else "unlock", GOOD if armed else "#e7e5e4", 13))
+        feeds = list(self.cv.feeds.values())
+        live = sum(feed.running and feed.status == "Live" for feed in feeds)
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
-        motions = sum(1 for ev in store.events_since(today) if ev["kind"] == "motion")
-        for b in self.cam_nav:
-            b.setVisible(len(live) > 1)
-        w, h = max(1, self.cam_img.width()), max(1, self.cam_img.height())
-        if live:
-            feed = live[self._cam_index % len(live)]
-            self.cam_name.setText(feed.cam["name"])
-            self.cam_badge.setText("●  Live")
-            self.cam_badge.setStyleSheet(f"QLabel{{background:{CRIT};color:#fff;border-radius:11px;"
-                                         "padding:3px 10px;font-size:11px;font-weight:800;}")
-            self.cam_img.setPixmap(rounded_pixmap(QPixmap.fromImage(feed.image), w, h))
-            self._snap_key = None
-            self.cam_power.setToolTip(f"Stop {feed.cam['name']}")
-        else:
-            latest = next((ev for ev in reversed(store.events) if ev.get("snapshot")), None)
-            key = (latest["snapshot"] if latest else None, w, h)
-            if key != self._snap_key:
-                self._snap_key = key
-                pm = QPixmap(latest["snapshot"]) if latest else QPixmap()
-                if pm.isNull():
-                    self.cam_img.setPixmap(QPixmap())
-                    self.cam_img.setText("No camera picture yet.\nStart a camera on the CCTV page.")
-                else:
-                    self.cam_img.setPixmap(rounded_pixmap(pm, w, h))
-            self.cam_name.setText(latest["camera_name"] if latest else "")
-            self.cam_badge.setText(f"{'Motion' if latest and latest['kind'] == 'motion' else 'Snapshot'}  ·  "
-                                   f"{datetime.fromtimestamp(latest['ts']):%a %H:%M}" if latest else "Off")
-            self.cam_badge.setStyleSheet(f"QLabel{{{glass_style(11)}padding:3px 10px;font-size:11px;"
-                                         "font-weight:700;}")
-            self.cam_power.setToolTip("Start the cameras")
-        cams = len(store.cameras)
-        self.cam_line.setText(f"{'Armed' if armed else 'Disarmed'}  ·  {len(live)} of {cams} camera"
-                              f"{'s' if cams != 1 else ''} live  ·  {motions} motion today")
+        motions = sum(1 for ev in self.cv.store.events_since(today) if ev["kind"] == "motion")
+        self.cam_line.setText(f"{len(feeds)} camera{'s' if len(feeds) != 1 else ''} · "
+                              f"{live} live · {motions} motion event{'s' if motions != 1 else ''} today")
+        self._sync_camera_grid(feeds)
+
+        if not hasattr(self, "camera_grid"):
+            return
+        self._sync_camera_grid(list(self.cv.feeds.values()))
+
+    def _sync_camera_grid(self, feeds):
+        ids = [feed.cam["id"] for feed in feeds]
+        current = set(ids)
+        for camera_id in set(self._camera_tiles) - current:
+            tile = self._camera_tiles.pop(camera_id)
+            self.camera_grid.removeWidget(tile)
+            tile.deleteLater()
+        for feed in feeds:
+            camera_id = feed.cam["id"]
+            if camera_id not in self._camera_tiles:
+                self._camera_tiles[camera_id] = DashboardCameraTile(self.cv, feed, self.camera_grid_host)
+
+        width = max(1, self.camera_scroll.viewport().width())
+        columns = max(1, min(3, (width + 12) // 350))
+        if ids != self._camera_ids or columns != self._camera_columns:
+            while self.camera_grid.count():
+                self.camera_grid.takeAt(0)
+            self._camera_ids = ids
+            self._camera_columns = columns
+            if not feeds:
+                if self._camera_empty is None:
+                    self._camera_empty = _lbl(
+                        "No cameras are set up yet. Add a camera from the CCTV page.", MUTED, 13, 500
+                    )
+                    self._camera_empty.setAlignment(Qt.AlignCenter)
+                    self._camera_empty.setMinimumHeight(180)
+                self.camera_grid.addWidget(self._camera_empty, 0, 0)
+            else:
+                if self._camera_empty is not None:
+                    self._camera_empty.deleteLater()
+                    self._camera_empty = None
+                for index, camera_id in enumerate(ids):
+                    self.camera_grid.addWidget(
+                        self._camera_tiles[camera_id], index // columns, index % columns
+                    )
+                for row in range((len(ids) + columns - 1) // columns):
+                    self.camera_grid.setRowStretch(row, 1)
+                for column in range(columns):
+                    self.camera_grid.setColumnStretch(column, 1)
+        for tile in self._camera_tiles.values():
+            tile.sync()
 
     def _refresh_week(self, e, now, watching):
         days = e.daily_outage_hours(7, now)
@@ -1165,25 +1263,6 @@ class SmartDashboardView(QWidget):
             self.house.view.reset_camera()
         else:
             self.house.view.focus_room(key)
-        self.refresh()
-
-    def _cycle_cam(self, step):
-        self._cam_index += step
-        self.refresh()
-
-    def _snapshot(self):
-        live = self._feeds_with_picture()
-        if live:
-            self.cv.manual_snapshot(live[self._cam_index % len(live)])
-        self.refresh()
-
-    def _cam_power(self):
-        live = self._feeds_with_picture()
-        if live:
-            self.cv.stop_camera(live[self._cam_index % len(live)])
-        else:
-            for f in self.cv.feeds.values():
-                self.cv.start_camera(f)
         self.refresh()
 
     def _go(self, module_id):

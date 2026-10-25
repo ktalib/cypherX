@@ -192,6 +192,7 @@ class House3DView(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
         self.mode = "cutaway"            # cutaway | walls | plan
         self.show_labels = True
+        self.show_device_labels = True
         self.show_flows = True
         self._tex = {}
         self._tiled = {}
@@ -718,26 +719,27 @@ class House3DView(QWidget):
                     load = model.load_w(room["id"])
                     self._tag(p, c[0], f"{room['name'].upper()}   {load:.0f} W",
                               self.tag_colors["room_bg"], self.tag_colors["room_fg"], f, True)
-            f.setPixelSize(11)
-            f.setBold(False)
-            for d in model.devices():
-                a = self._anchor2d(d["id"])
-                if a is None:
-                    continue
-                on = d["device"]["on"]
-                if not on and d["id"] != self._hover:
-                    p.setPen(QPen(QColor(10, 14, 20, 200), 1.5))
-                    p.setBrush(QColor(150, 158, 170))
-                    p.drawEllipse(a, 4, 4)
-                    continue
-                live = self.model.live_w(d["id"])
-                txt = f"{d['name']}  ·  {live if live is not None else d['device']['watts']:.0f} W" \
-                      + ("  live" if live is not None else "")
-                self._tag(p, QPointF(a.x(), a.y() - 16), txt,
-                          self.tag_colors["on_bg"] if on else QColor(15, 18, 24, 190),
-                          self.tag_colors["on_fg"] if on else QColor(170, 180, 195), f, False,
-                          dot=self.tag_colors["on_dot"] if on else QColor(110, 115, 125),
-                          bold=d["id"] == self._hover)
+            if self.show_device_labels:
+                f.setPixelSize(11)
+                f.setBold(False)
+                for d in model.devices():
+                    a = self._anchor2d(d["id"])
+                    if a is None:
+                        continue
+                    on = d["device"]["on"]
+                    if not on and d["id"] != self._hover:
+                        p.setPen(QPen(QColor(10, 14, 20, 200), 1.5))
+                        p.setBrush(QColor(150, 158, 170))
+                        p.drawEllipse(a, 4, 4)
+                        continue
+                    live = self.model.live_w(d["id"])
+                    txt = f"{d['name']}  ·  {live if live is not None else d['device']['watts']:.0f} W" \
+                          + ("  live" if live is not None else "")
+                    self._tag(p, QPointF(a.x(), a.y() - 16), txt,
+                              self.tag_colors["on_bg"] if on else QColor(15, 18, 24, 190),
+                              self.tag_colors["on_fg"] if on else QColor(170, 180, 195), f, False,
+                              dot=self.tag_colors["on_dot"] if on else QColor(110, 115, 125),
+                              bold=d["id"] == self._hover)
 
     def _tag(self, p, pt, text, bg, fg, font, big, dot=None, bold=False):
         p.setFont(font)
