@@ -17,6 +17,7 @@ from app.widgets.terminal_panel import TerminalPanel
 from app.icons import get_pixmap, get_icon
 
 _ICON_PROVIDER = None  # created lazily (needs a QApplication)
+_ICON_CACHE = {}       # shortcut path -> QIcon
 
 # Default curated safe Windows utility shortcuts
 DEFAULT_LAUNCHER_APPS = [
@@ -92,10 +93,18 @@ class ApplicationLauncherView(QWidget):
         saved = Database.get_instance().get_setting("custom_launcher_shortcuts", [])
         self.shortcuts = DEFAULT_LAUNCHER_APPS + saved
         self._render_cards(self.shortcuts)
+        self._apply_filter()
 
     @staticmethod
     def _app_icon(path: str) -> QIcon:
-        """Real Windows icon for the target (exe / msc / folder), or a vector fallback."""
+        """Real Windows icon for the target (exe / msc / folder), or a vector fallback.
+        Remembered per path: asking Windows for an icon is slow."""
+        if path not in _ICON_CACHE:
+            _ICON_CACHE[path] = ApplicationLauncherView._lookup_icon(path)
+        return _ICON_CACHE[path]
+
+    @staticmethod
+    def _lookup_icon(path: str) -> QIcon:
         resolved = path
         if not os.path.isabs(path):
             resolved = shutil.which(path) or os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "System32", path)
@@ -109,14 +118,15 @@ class ApplicationLauncherView(QWidget):
         return get_icon("launcher", "#38bdf8", 32)
 
     def _render_cards(self, items):
+        """Build one tile per shortcut. Filtering only re-arranges these (see _place_cards)."""
         while self.grid_layout.count():
             child = self.grid_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
+        self._cards = []
 
-        cols = 4
         custom = {a["path"] for a in Database.get_instance().get_setting("custom_launcher_shortcuts", [])}
-        for idx, app in enumerate(items):
+        for app in items:
             card = QPushButton()
             card.setObjectName("launch-tile")
             card.setCursor(Qt.PointingHandCursor)
@@ -152,10 +162,25 @@ class ApplicationLauncherView(QWidget):
             if app["path"] in custom:
                 card.setContextMenuPolicy(Qt.CustomContextMenu)
                 card.customContextMenuRequested.connect(lambda _pos, p=app["path"], n=app["name"]: self._remove_custom(p, n))
-            self.grid_layout.addWidget(card, idx // cols, idx % cols)
+            self._cards.append((app, card))
+
+    def _place_cards(self, visible):
+        cols = 4
+        while self.grid_layout.count():
+            self.grid_layout.takeAt(0)
+        for r in range(self.grid_layout.rowCount()):
+            self.grid_layout.setRowStretch(r, 0)
+        shown = 0
+        for app, card in self._cards:
+            if visible(app):
+                self.grid_layout.addWidget(card, shown // cols, shown % cols)
+                card.show()
+                shown += 1
+            else:
+                card.hide()
         for c in range(cols):
             self.grid_layout.setColumnStretch(c, 1)
-        self.grid_layout.setRowStretch(len(items) // cols + 1, 1)
+        self.grid_layout.setRowStretch(shown // cols + 1, 1)
 
     def _remove_custom(self, path, name):
         if QMessageBox.question(self, "Remove Shortcut", f"Remove '{name}' from the launcher?") != QMessageBox.Yes:
@@ -166,11 +191,7 @@ class ApplicationLauncherView(QWidget):
 
     def _apply_filter(self):
         q = self.search_input.text().strip().lower()
-        if not q:
-            self._render_cards(self.shortcuts)
-        else:
-            filtered = [a for a in self.shortcuts if q in a["name"].lower() or q in a.get("desc", "").lower()]
-            self._render_cards(filtered)
+        self._place_cards(lambda a: not q or q in a["name"].lower() or q in a.get("desc", "").lower())
 
     def _add_custom_app(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select App, Shortcut or File to Add", "C:\\",
