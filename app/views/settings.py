@@ -429,6 +429,8 @@ class SettingsView(QWidget):
         win = self.window()
         if hasattr(win, "metrics_timer"):
             win.metrics_timer.setInterval(ms)
+        if hasattr(win, "view_system_monitor"):
+            win.view_system_monitor.set_rate(ms)
 
     def _on_autostart(self, on):
         try:

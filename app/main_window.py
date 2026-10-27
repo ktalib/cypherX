@@ -84,6 +84,8 @@ class MainWindow(QMainWindow):
         self._was_maximized = False
         self._right_was_visible = False
         self._setup_ui()
+        self.view_system_monitor.set_rate(int(get_pref("pref_rate") or DEFAULT_METRICS_INTERVAL_MS))
+        self.view_system_monitor.rate_changed.connect(self.set_telemetry_rate)
         self._apply_user()
         self._setup_shortcuts()
         self._setup_tray()
@@ -287,6 +289,17 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+L"), self).activated.connect(self.lock)
         QShortcut(QKeySequence("Ctrl+Space"), self).activated.connect(self.talk)
 
+    def set_telemetry_rate(self, ms):
+        """One refresh rate for the whole app (Settings and System Monitor both set it)."""
+        Database.get_instance().set_setting("pref_rate", int(ms))
+        if hasattr(self, "metrics_timer"):
+            self.metrics_timer.setInterval(int(ms))
+        combo = getattr(self.view_settings, "rate", None)
+        if combo is not None and combo.findData(int(ms)) >= 0:
+            combo.blockSignals(True)
+            combo.setCurrentIndex(combo.findData(int(ms)))
+            combo.blockSignals(False)
+
     def talk(self):
         """Open the assistant and start listening (mic button, Ctrl+Space, tray)."""
         if self._locked:
@@ -349,6 +362,21 @@ class MainWindow(QMainWindow):
                 self.right_panel.setVisible(False)
             else:
                 self.right_panel.setVisible(bool(get_pref("pref_right_panel")))
+            self._replay_telemetry()
+
+    def _replay_telemetry(self):
+        """Pages only get telemetry while visible: give a page that just opened the last sample."""
+        last = getattr(self, "_last_tele", None)
+        if not last:
+            return
+        cpu, mem, disks, rates, uptime = last
+        try:
+            if self.right_panel.isVisible():
+                self.right_panel.update_telemetry(cpu, mem, disks, rates, uptime)
+            if self.view_dashboard.isVisible():
+                self.view_dashboard.update_metrics(cpu, mem, disks, rates)
+        except Exception:
+            pass
 
     def navigate_by_id(self, module_id: str):
         if not module_allowed(module_id, self.user.get("role")):
@@ -721,23 +749,30 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(1500, self._start_services)
 
     def _sample_telemetry(self):
+        # Nobody can see it (minimised, in the tray, locked): skip the work. In tray mode this
+        # loop would otherwise run all day for nothing.
+        if self._locked or not self.isVisible() or self.isMinimized():
+            return
         try:
+            self._tele_tick = getattr(self, "_tele_tick", 0) + 1
             cpu = SystemService.get_cpu_metrics()
             mem = SystemService.get_memory_metrics()
-            disks = SystemService.get_disks_summary()
+            # disk space hardly moves, and reading every drive can be slow on Windows
+            # (network drives, card readers): every 10th tick is plenty
+            if self._tele_tick % 10 == 1 or getattr(self, "_disks", None) is None:
+                self._disks = SystemService.get_disks_summary()
+            disks = self._disks
             rates = self.net_service.sample_bandwidth()
             uptime = SystemService.get_uptime_seconds()
+            self._last_tele = (cpu, mem, disks, rates, uptime)
 
-            # Update Right Panel
-            self.right_panel.update_telemetry(cpu, mem, disks, rates, uptime)
+            if self.right_panel.isVisible():
+                self.right_panel.update_telemetry(cpu, mem, disks, rates, uptime)
+            if self.view_dashboard.isVisible():
+                self.view_dashboard.update_metrics(cpu, mem, disks, rates)
 
-            # Update Dashboard
-            self.view_dashboard.update_metrics(cpu, mem, disks, rates)
-
-            # Update System Monitor
+            # these keep their charts' history while hidden (cheap) and skip the rest
             self.view_system_monitor.update_telemetry(cpu, mem, disks, rates, uptime)
-
-            # Update Network Monitor
             self.view_network_monitor.update_telemetry(rates)
 
         except Exception as e:
