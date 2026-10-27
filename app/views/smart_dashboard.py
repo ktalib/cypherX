@@ -19,12 +19,12 @@ from PySide6.QtGui import (QPainter, QColor, QPen, QFont, QFontMetrics, QPainter
                            QRegion)
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QFrame,
-    QScrollArea, QSizePolicy, QToolTip, QComboBox, QTabWidget
+    QScrollArea, QSizePolicy, QToolTip, QStackedWidget, QButtonGroup, QBoxLayout
 )
 
 from app.icons import get_icon, get_pixmap
 from app.views.home_ui import (ACCENT, ACCENT_HI, ON_ACCENT, GOOD, WARN, CRIT, TEXT, SOFT, MUTED, DIM, TRACK,
-                               GLASS, Toggle, ArcDial, WeekBars, pill_style, glass_style, rgba,
+                               GLASS, Toggle, ArcDial, WeekBars, Segmented, pill_style, glass_style, rgba,
                                apply_home_style)
 
 REFRESH_MS = 2000
@@ -120,6 +120,10 @@ class SquareCameraPreview(QWidget):
         feed.frame_ready.connect(self.update)
         feed.state_changed.connect(self.update)
 
+    def set_side(self, side):
+        if self.width() != side:
+            self.setFixedSize(side, side)
+
     def sizeHint(self):
         return QSize(240, 240)
 
@@ -157,8 +161,8 @@ class DashboardCameraTile(QFrame):
         self.view = view
         self.feed = feed
         self.setObjectName("panel")
-        self.setMinimumWidth(300)
-        self.setMaximumWidth(350)
+        self.setMinimumWidth(200)
+        self.setMaximumWidth(380)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         lo = QVBoxLayout(self)
         lo.setContentsMargins(12, 12, 12, 12)
@@ -563,7 +567,6 @@ class HeroHouse(QWidget):
         self.view = House3DView(model)
         self.view.setMinimumSize(320, 300)
         self.view.use_warm_theme()
-        self.view.show_device_labels = False
         lo.addWidget(self.view)
 
     def resizeEvent(self, e):
@@ -595,10 +598,22 @@ class GlassStat(QFrame):
             col.addWidget(w)
         lo.addLayout(col)
 
+    def set_compact(self, compact):
+        """One line (icon + value) when the house is small."""
+        if getattr(self, "_compact", None) == compact:
+            return
+        self._compact = compact
+        self.title.setVisible(not compact)
+        self.sub.setVisible(not compact and bool(self.sub.text()))
+        self.value.setStyleSheet(f"color:{TEXT};font-size:{14 if compact else 19}px;font-weight:600;"
+                                 "background:transparent;border:none;")
+        self.layout().setContentsMargins(*((8, 6, 10, 6) if compact else (12, 10, 14, 10)))
+        self.icon.setFixedSize(*((26, 26) if compact else (34, 34)))
+
     def set(self, value, sub="", icon=None, color=ACCENT):
         self.value.setText(value)
         self.sub.setText(sub)
-        self.sub.setVisible(bool(sub))
+        self.sub.setVisible(bool(sub) and not getattr(self, "_compact", False))
         if icon:
             self.icon.setPixmap(get_pixmap(icon, color, 17))
         self.icon.setStyleSheet(f"background:{rgba(color, 0.16)};border-radius:17px;border:none;")
@@ -630,8 +645,8 @@ class SmartDashboardView(QWidget):
 
     def _build(self):
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(18, 14, 18, 14)
-        outer.setSpacing(12)
+        outer.setContentsMargins(16, 12, 16, 14)
+        outer.setSpacing(10)
 
         self.header = self._build_header()
         self.hero = self._build_hero()
@@ -642,31 +657,23 @@ class SmartDashboardView(QWidget):
         self.card_meter = self._build_meter()
         self.card_fridge = self._build_fridge()
         self.card_energy = self._build_energy()
-        self.tabs = QTabWidget()
-        self.tabs.setObjectName("dashboard_tabs")
-        self.tabs.setDocumentMode(True)
-        self.tabs.setStyleSheet(
-            "QTabWidget#dashboard_tabs::pane{border:1px solid rgba(255,255,255,0.08);"
-            "border-radius:16px;background:rgba(18,16,15,0.55);top:-1px;}"
-            "QTabWidget#dashboard_tabs QTabBar::tab{background:rgba(255,255,255,0.05);"
-            f"color:{SOFT};border:1px solid rgba(255,255,255,0.07);border-bottom:none;"
-            "padding:9px 18px;margin-right:5px;border-top-left-radius:10px;border-top-right-radius:10px;"
-            "font-weight:600;min-width:78px;}"
-            f"QTabWidget#dashboard_tabs QTabBar::tab:selected{{background:{rgba(ACCENT, 0.18)};"
-            f"color:{TEXT};border-color:{rgba(ACCENT, 0.55)};}}"
-            "QTabWidget#dashboard_tabs QTabBar::tab:hover{background:rgba(255,255,255,0.10);}"
-        )
-        self.tabs.addTab(self._single_card_page(self.card_rooms), get_icon("home", TEXT, 15), "Devices")
-        self.tabs.addTab(self._single_card_page(self.card_power), get_icon("zap", TEXT, 15), "Power")
-        self.tabs.addTab(self.card_cam, get_icon("video", TEXT, 15), "Cameras")
-        self.tabs.addTab(self._scroll_page(self._energy_page()), get_icon("activity", TEXT, 15), "Energy")
-        self.tabs.currentChanged.connect(lambda _index: QTimer.singleShot(0, self._layout_camera_tiles))
+        self.panel = self._build_panel()
         outer.addWidget(self.header)
-        outer.addWidget(self.hero, 2)
-        outer.addWidget(self.tabs, 3)
-        self.hero.setMinimumHeight(270)
-        self.hero.setMaximumHeight(370)
+        # the house and the control panel side by side; stacked when the window is narrow
+        self.body = QBoxLayout(QBoxLayout.LeftToRight)
+        self.body.setSpacing(12)
+        self.body.addWidget(self.hero, 5)
+        self.body.addWidget(self.panel, 4)
+        outer.addLayout(self.body, 1)
+        self._layout_mode = None
         self._set_header_layout()
+
+    @staticmethod
+    def _flat(card):
+        """A card shown inside the panel: no second frame around it."""
+        card.setObjectName("flat")
+        card.layout().setContentsMargins(2, 4, 2, 4)
+        return card
 
     @staticmethod
     def _scroll_page(content):
@@ -674,37 +681,98 @@ class SmartDashboardView(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea{background:transparent;border:none;}")
+        scroll.setStyleSheet("QScrollArea{background:transparent;border:none;}"
+                             "QScrollBar:vertical{background:transparent;width:7px;margin:2px;}"
+                             "QScrollBar::handle:vertical{background:rgba(255,255,255,0.20);border-radius:3px;"
+                             "min-height:28px;}QScrollBar::add-line,QScrollBar::sub-line{height:0;}")
+        content.setStyleSheet("background:transparent;")
         scroll.setWidget(content)
         return scroll
 
-    @classmethod
-    def _single_card_page(cls, card):
-        page = QWidget()
-        page.setStyleSheet("background:transparent;")
-        lo = QVBoxLayout(page)
-        lo.setContentsMargins(10, 10, 10, 10)
-        lo.addWidget(card)
-        return cls._scroll_page(page)
+    def _build_panel(self):
+        """Devices / Power / Cameras / Energy in one panel that fills the height — one scroll per page."""
+        panel = QFrame()
+        panel.setObjectName("panel")
+        panel.setMinimumWidth(340)
+        v = QVBoxLayout(panel)
+        v.setContentsMargins(14, 14, 14, 12)
+        v.setSpacing(10)
+        self.seg = Segmented([("devices", "home", "Devices"), ("power", "zap", "Power"),
+                              ("cameras", "video", "Cameras"), ("energy", "activity", "Energy")])
+        v.addWidget(self.seg)
+        self.stack = QStackedWidget()
+        self.pages = {}
+        # devices: the list itself is the only thing that scrolls
+        self.pages["devices"] = self._flat(self.card_rooms)
+        # power: dial + power cuts this week
+        pw = QWidget()
+        pl = QVBoxLayout(pw)
+        pl.setContentsMargins(0, 0, 4, 0)
+        pl.setSpacing(6)
+        pl.addWidget(self._flat(self.card_power))
+        pl.addWidget(self._flat(self.card_week))
+        pl.addStretch()
+        self.pages["power"] = self._scroll_page(pw)
+        self.pages["cameras"] = self.card_cam
+        # energy: meter, fridge, cost — two columns when the panel is wide
+        ew = QWidget()
+        self.energy_grid = QGridLayout(ew)
+        self.energy_grid.setContentsMargins(0, 0, 4, 0)
+        self.energy_grid.setSpacing(10)
+        for c in (self.card_meter, self.card_fridge, self.card_energy):
+            self._flat(c)
+        self._energy_cols = None
+        self.pages["energy"] = self._scroll_page(ew)
+        for key in ("devices", "power", "cameras", "energy"):
+            self.stack.addWidget(self.pages[key])
+        v.addWidget(self.stack, 1)
+        self.seg.changed.connect(self._show_page)
+        return panel
 
-    def _energy_page(self):
-        page = QWidget()
-        page.setStyleSheet("background:transparent;")
-        grid = QGridLayout(page)
-        grid.setContentsMargins(10, 10, 10, 10)
-        grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(10)
-        for index, card in enumerate((self.card_week, self.card_meter, self.card_fridge, self.card_energy)):
-            grid.addWidget(card, index // 2, index % 2)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        grid.setRowStretch(0, 1)
-        grid.setRowStretch(1, 1)
-        return page
+    def _show_page(self, key):
+        self.stack.setCurrentWidget(self.pages[key])
+        QTimer.singleShot(0, self._layout_camera_tiles)
+
+    def _place_energy(self, cols):
+        if cols == self._energy_cols:
+            return
+        self._energy_cols = cols
+        g = self.energy_grid
+        while g.count():
+            g.takeAt(0)
+        cards = (self.card_meter, self.card_fridge, self.card_energy)
+        if cols == 2:
+            g.addWidget(cards[0], 0, 0)
+            g.addWidget(cards[1], 0, 1)
+            g.addWidget(cards[2], 1, 0, 1, 2)
+        else:
+            for i, c in enumerate(cards):
+                g.addWidget(c, i, 0)
+        g.setRowStretch(3, 1)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
         self._set_header_layout()
+        w, h = self.width(), self.height()
+        side = w >= 820
+        if side != self._layout_mode:
+            self._layout_mode = side
+            self.body.setDirection(QBoxLayout.LeftToRight if side else QBoxLayout.TopToBottom)
+            self.body.setStretch(0, 5 if side else 0)
+            self.body.setStretch(1, 4 if side else 1)
+            self.panel.setMaximumWidth(560 if side else 16777215)
+        if side:
+            self.hero.setMinimumHeight(0)
+            self.hero.setMaximumHeight(16777215)
+        else:
+            hh = max(190, min(320, int(h * 0.34)))
+            self.hero.setFixedHeight(hh)
+        # small house: show the figures compactly and drop the hint
+        compact = (self.hero.height() < 380) or (self.hero.width() < 520)
+        for g in (self.g_load, self.g_bat, self.g_grid, self.g_weather):
+            g.set_compact(compact)
+        self.hero_hint.setVisible(not compact)
+        self._place_energy(2 if self.panel.width() >= 620 else 1)
         self._layout_camera_tiles()
 
     def _layout_camera_tiles(self):
@@ -717,6 +785,8 @@ class SmartDashboardView(QWidget):
         wide = self.width() >= 1050
         self.header_lo.setDirection(QHBoxLayout.LeftToRight if wide else QHBoxLayout.TopToBottom)
         self.header_lo.setAlignment(self.header_right, Qt.AlignVCenter if wide else Qt.AlignLeft)
+        self.greet.setStyleSheet(f"color:{TEXT};font-size:{26 if wide else 22}px;font-weight:300;"
+                                 "background:transparent;border:none;")
 
     # header ------------------------------------------------------------------
 
@@ -726,10 +796,10 @@ class SmartDashboardView(QWidget):
         lo = QHBoxLayout(box)
         self.header_lo = lo
         lo.setContentsMargins(4, 0, 4, 0)
-        lo.setSpacing(14)
+        lo.setSpacing(8)
         left = QVBoxLayout()
-        left.setSpacing(2)
-        self.greet = _lbl("", TEXT, 28, 300)
+        left.setSpacing(0)
+        self.greet = _lbl("", TEXT, 26, 300)
         self.date = _lbl("", MUTED, 12, 600, 0.3)
         left.addWidget(self.greet)
         left.addWidget(self.date)
@@ -744,6 +814,7 @@ class SmartDashboardView(QWidget):
         self.arm_btn = _action("Arm", "shield", self._toggle_arm)
         right.addWidget(self.arm_btn)
         right.addWidget(_action("Bought token", "plus", lambda: self._energy_action("_log_token"), primary=True))
+        right.addStretch()
         lo.addLayout(right)
         lo.setAlignment(right, Qt.AlignVCenter)
         self.header_right = right
@@ -757,17 +828,19 @@ class SmartDashboardView(QWidget):
         hero.setAttribute(Qt.WA_StyledBackground, True)
         hero.setStyleSheet("QFrame#dash_hero{border-radius:24px;border:1px solid rgba(255,255,255,0.07);"
                            "background:#120f0d;}")
+        hero.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         g = QGridLayout(hero)
         g.setContentsMargins(0, 0, 0, 0)
         self.house = HeroHouse(self.sv.model)
+        self.house.view.setMinimumSize(240, 160)
         self.house.view.device_clicked.connect(self._toggle)
         g.addWidget(self.house, 0, 0)
 
         stats = QWidget()
         stats.setStyleSheet("background:transparent;")
         sl = QVBoxLayout(stats)
-        sl.setContentsMargins(18, 18, 18, 18)
-        sl.setSpacing(10)
+        sl.setContentsMargins(14, 14, 14, 14)
+        sl.setSpacing(8)
         self.g_load = GlassStat("zap", "LIVE LOAD")
         self.g_bat = GlassStat("battery", "BATTERY")
         self.g_grid = GlassStat("power", "GRID")
@@ -779,18 +852,18 @@ class SmartDashboardView(QWidget):
         wbox = QWidget()
         wbox.setStyleSheet("background:transparent;")
         wl = QVBoxLayout(wbox)
-        wl.setContentsMargins(18, 18, 18, 18)
+        wl.setContentsMargins(14, 14, 14, 14)
         wl.addWidget(self.g_weather)
         g.addWidget(wbox, 0, 0, Qt.AlignTop | Qt.AlignRight)
 
         bottom = QWidget()
         bottom.setStyleSheet("background:transparent;")
         bl = QHBoxLayout(bottom)
-        bl.setContentsMargins(18, 14, 18, 16)
+        bl.setContentsMargins(14, 10, 14, 12)
+        self.hero_hint = QLabel("Drag to rotate  ·  click an appliance to switch it")
+        self.hero_hint.setStyleSheet(f"{glass_style(12)}padding:5px 10px;font-size:11px;color:{SOFT};")
+        bl.addWidget(self.hero_hint)
         bl.addStretch()
-        hint = QLabel("Drag to rotate  ·  hover for details  ·  click an appliance to switch it")
-        hint.setStyleSheet(f"{glass_style(12)}padding:5px 10px;font-size:11px;color:{SOFT};")
-        bl.addWidget(hint)
         open3d = QPushButton(" Open 3D")
         open3d.setIcon(get_icon("maximize", TEXT, 13))
         open3d.setCursor(Qt.PointingHandCursor)
@@ -807,22 +880,28 @@ class SmartDashboardView(QWidget):
         card, lo, head = _card("Rooms", "home")
         self.rooms_count = _lbl("", MUTED, 11, 600)
         head.addWidget(self.rooms_count)
-        self.room_filter = QComboBox()
-        self.room_filter.setAccessibleName("Filter appliances by room")
-        self.room_filter.setToolTip("Show all appliances or filter by room")
-        self.room_filter.setMinimumHeight(36)
-        self.room_filter.currentIndexChanged.connect(
-            lambda index: self._pick_room(self.room_filter.itemData(index))
-            if index >= 0 and self.room_filter.itemData(index) else None
-        )
-        lo.addWidget(self.room_filter)
+        # room chips: one tap, in a strip that scrolls sideways if there are many rooms
+        self.chip_host = QWidget()
+        self.chips = QHBoxLayout(self.chip_host)
+        self.chips.setContentsMargins(0, 0, 0, 0)
+        self.chips.setSpacing(6)
+        self.chip_group = QButtonGroup(self)
+        self.chip_group.setExclusive(True)
+        self.chip_btns = {}
+        chip_scroll = QScrollArea()
+        chip_scroll.setWidgetResizable(True)
+        chip_scroll.setFrameShape(QFrame.NoFrame)
+        chip_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        chip_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        chip_scroll.setFixedHeight(34)
+        chip_scroll.setStyleSheet("QScrollArea{background:transparent;border:none;}")
+        self.chip_host.setStyleSheet("background:transparent;")
+        chip_scroll.setWidget(self.chip_host)
+        lo.addWidget(chip_scroll)
         self.device_scroll = QScrollArea()
         self.device_scroll.setWidgetResizable(True)
         self.device_scroll.setFrameShape(QFrame.NoFrame)
         self.device_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.device_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.device_scroll.setMinimumHeight(150)
-        self.device_scroll.setMaximumHeight(270)
         self.device_scroll.setStyleSheet(
             "QScrollArea{background:transparent;border:none;}"
             "QScrollBar:vertical{background:transparent;width:7px;margin:2px;}"
@@ -834,12 +913,26 @@ class SmartDashboardView(QWidget):
         self.rows_lo = QVBoxLayout(device_list)
         self.rows_lo.setContentsMargins(0, 0, 4, 0)
         self.rows_lo.setSpacing(6)
+        self.rows_lo.addStretch()
         self.device_scroll.setWidget(device_list)
         lo.addWidget(self.device_scroll, 1)
         self.rooms_note = _lbl("", DIM, 11, 500)
         self.rooms_note.setWordWrap(True)
         lo.addWidget(self.rooms_note)
         return card
+
+    def _chip_btn(self, key, text):
+        b = QPushButton(text)
+        b.setCheckable(True)
+        b.setCursor(Qt.PointingHandCursor)
+        b.setFixedHeight(30)
+        b.setStyleSheet(f"QPushButton{{background:rgba(255,255,255,0.06);color:{SOFT};border:none;"
+                        f"border-radius:15px;padding:0 13px;font-weight:600;}}"
+                        f"QPushButton:hover{{background:rgba(255,255,255,0.11);}}"
+                        f"QPushButton:checked{{background:{ACCENT};color:{ON_ACCENT};font-weight:800;}}")
+        b.clicked.connect(lambda _=False, k=key: self._pick_room(k))
+        self.chip_group.addButton(b)
+        return b
 
     # power, camera, week ------------------------------------------------------------
 
@@ -848,7 +941,7 @@ class SmartDashboardView(QWidget):
         self.power_chip = QLabel()
         head.addWidget(self.power_chip)
         self.dial = ArcDial()
-        self.dial.setMinimumHeight(190)
+        self.dial.setMinimumHeight(170)
         lo.addWidget(self.dial, 1)
         row = QHBoxLayout()
         row.setSpacing(8)
@@ -877,12 +970,14 @@ class SmartDashboardView(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
-        toolbar = QHBoxLayout()
         self.cam_line = _lbl("Your cameras appear here as square tiles.", MUTED, 11, 500)
-        toolbar.addWidget(self.cam_line, 1)
+        self.cam_line.setWordWrap(True)
+        layout.addWidget(self.cam_line)
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(8)
         self.cam_arm = _action("Arm alerts", "shield", self._toggle_arm)
-        toolbar.addWidget(self.cam_arm)
-        toolbar.addWidget(_action("Open CCTV", "maximize", lambda: self._go("cctv")))
+        toolbar.addWidget(self.cam_arm, 1)
+        toolbar.addWidget(_action("Open CCTV", "maximize", lambda: self._go("cctv")), 1)
         layout.addLayout(toolbar)
 
         self.camera_scroll = QScrollArea()
@@ -1076,19 +1171,22 @@ class SmartDashboardView(QWidget):
 
     def _refresh_rooms(self, m):
         names = {r["id"]: r["name"] for r in m.rooms}
-        keys = [("all", "All rooms")] + [(r["id"], r["name"]) for r in m.rooms]
-        current_keys = [self.room_filter.itemData(i) for i in range(self.room_filter.count())]
-        if current_keys != [key for key, _ in keys]:
-            self.room_filter.blockSignals(True)
-            self.room_filter.clear()
-            for key, name in keys:
-                self.room_filter.addItem(name, key)
-            self.room_filter.blockSignals(False)
-            if self._room not in dict(keys):
+        keys = ["all"] + [r["id"] for r in m.rooms]
+        if list(self.chip_btns) != keys:
+            for b in self.chip_btns.values():
+                self.chip_group.removeButton(b)
+                b.setParent(None)
+            while self.chips.count():
+                self.chips.takeAt(0)
+            self.chip_btns = {}
+            for k in keys:
+                b = self._chip_btn(k, "All" if k == "all" else names[k])
+                self.chip_btns[k] = b
+                self.chips.addWidget(b)
+            self.chips.addStretch()
+            if self._room not in self.chip_btns:
                 self._room = "all"
-        self.room_filter.blockSignals(True)
-        self.room_filter.setCurrentIndex(self.room_filter.findData(self._room))
-        self.room_filter.blockSignals(False)
+        self.chip_btns[self._room].setChecked(True)
         devices = sorted(m.devices() if self._room == "all" else m.devices(self._room),
                          key=lambda d: (not d["device"]["on"], d["room"], d["name"]))
         ids = [d["id"] for d in devices]
@@ -1106,6 +1204,7 @@ class SmartDashboardView(QWidget):
                     row.switched.connect(self._switch)
                 keep[d["id"]] = row
                 self.rows_lo.addWidget(row)
+            self.rows_lo.addStretch()
             self.rows.update(keep)
         for d in devices:
             self.rows[d["id"]].set_item(d, names.get(d["room"], "") if self._room == "all" else "",
@@ -1127,10 +1226,6 @@ class SmartDashboardView(QWidget):
                               f"{live} live · {motions} motion event{'s' if motions != 1 else ''} today")
         self._sync_camera_grid(feeds)
 
-        if not hasattr(self, "camera_grid"):
-            return
-        self._sync_camera_grid(list(self.cv.feeds.values()))
-
     def _sync_camera_grid(self, feeds):
         ids = [feed.cam["id"] for feed in feeds]
         current = set(ids)
@@ -1144,10 +1239,16 @@ class SmartDashboardView(QWidget):
                 self._camera_tiles[camera_id] = DashboardCameraTile(self.cv, feed, self.camera_grid_host)
 
         width = max(1, self.camera_scroll.viewport().width())
-        columns = max(1, min(3, (width + 12) // 350))
+        columns = max(1, min(3, (width + 12) // 300))
+        side = max(140, min(280, (width - 12 * (columns - 1)) // columns - 30))
+        for tile in self._camera_tiles.values():
+            tile.preview.set_side(side)
         if ids != self._camera_ids or columns != self._camera_columns:
             while self.camera_grid.count():
                 self.camera_grid.takeAt(0)
+            for i in range(4):                    # forget the stretches of an earlier, wider layout
+                self.camera_grid.setColumnStretch(i, 0)
+                self.camera_grid.setRowStretch(i, 0)
             self._camera_ids = ids
             self._camera_columns = columns
             if not feeds:

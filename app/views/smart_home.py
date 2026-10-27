@@ -24,7 +24,7 @@ from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QScrollArea,
     QComboBox, QSpinBox, QDoubleSpinBox, QInputDialog, QGridLayout, QProgressBar,
-    QMessageBox, QButtonGroup, QCheckBox, QDialog, QFormLayout, QDialogButtonBox,
+    QMessageBox, QButtonGroup, QCheckBox, QStackedWidget, QDialog, QFormLayout, QDialogButtonBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 )
 
@@ -32,6 +32,7 @@ from app.icons import get_icon
 from app.database import Database
 from app.home3d.model import HomeModel, HOME_FILE
 from app.home3d.view3d import House3DView
+from app.views.home_ui import Segmented
 from app.home3d.energy import EnergyLog, read_grid_from_charger
 from app.server.events import bus
 from app.widgets.home.common import make_menu, hicon
@@ -211,24 +212,25 @@ class SmartHomeView(QWidget):
         title_box.setObjectName("panel")
         tb = QHBoxLayout(title_box)
         tb.setContentsMargins(14, 8, 10, 8)
-        title = QLabel("SMART HOME // 3D POWER MAP")
-        title.setObjectName("section-header")
-        tb.addWidget(title)
-        tb.addSpacing(12)
-        self.mode_group = QButtonGroup(self)
-        for i, (mode, text) in enumerate((("cutaway", "Cut-away"), ("walls", "Full walls"),
-                                          ("plan", "Floor plan"))):
-            b = QPushButton(text)
-            b.setCheckable(True)
-            b.setChecked(mode == "cutaway")
-            b.clicked.connect(lambda _=False, m=mode: self.view.set_mode(m))
-            self.mode_group.addButton(b, i)
-            tb.addWidget(b)
+        self.title_lbl = QLabel("SMART HOME // 3D POWER MAP")
+        self.title_lbl.setObjectName("section-header")
+        tb.addWidget(self.title_lbl)
         tb.addSpacing(8)
-        self.labels_btn = QPushButton("Labels")
+        # view modes as one segmented control (icons only when the window is narrow)
+        self.modes = Segmented([("cutaway", "layers", "Cut-away"), ("walls", "home", "Walls"),
+                                ("plan", "square", "Plan")], height=30)
+        self.modes.setMaximumWidth(330)
+        self.modes.changed.connect(lambda m: self.view.set_mode(m))
+        tb.addWidget(self.modes, 1)
+        tb.addSpacing(6)
+        self.labels_btn = QPushButton(" Labels")
+        self.labels_btn.setIcon(get_icon("file_text", "#e2e8f0", 13))
+        self.labels_btn.setToolTip("Show names and watts on the house")
         self.labels_btn.setCheckable(True)
         self.labels_btn.setChecked(True)
-        self.flows_btn = QPushButton("Power flow")
+        self.flows_btn = QPushButton(" Power flow")
+        self.flows_btn.setIcon(get_icon("zap", "#e2e8f0", 13))
+        self.flows_btn.setToolTip("Show the wires carrying power")
         self.flows_btn.setCheckable(True)
         self.flows_btn.setChecked(True)
         tb.addWidget(self.labels_btn)
@@ -236,6 +238,7 @@ class SmartHomeView(QWidget):
         tb.addStretch()
         reset = QPushButton(" Reset view")
         reset.setIcon(get_icon("refresh", "#e2e8f0", 13))
+        reset.setToolTip("Reset view")
         reset.clicked.connect(lambda: self.view.reset_camera())
         tb.addWidget(reset)
         layout_btn = QPushButton(" Layout file")
@@ -243,6 +246,9 @@ class SmartHomeView(QWidget):
         layout_btn.setToolTip("Open smart_home.json to add rooms or move furniture, then Reload")
         layout_btn.clicked.connect(self._layout_menu)
         tb.addWidget(layout_btn)
+        self._toolbar_btns = [(self.labels_btn, " Labels"), (self.flows_btn, " Power flow"),
+                              (reset, " Reset view"), (layout_btn, " Layout file")]
+        self._compact_bar = None
         main.addWidget(title_box)
 
         body = QHBoxLayout()
@@ -265,12 +271,21 @@ class SmartHomeView(QWidget):
         self.labels_btn.toggled.connect(lambda on: (setattr(self.view, "show_labels", on), self.view.update()))
         self.flows_btn.toggled.connect(lambda on: (setattr(self.view, "show_flows", on), self.view.update()))
 
-        # ---- side panel
-        side = QWidget()
-        side.setStyleSheet("background:transparent;")
-        sl = QVBoxLayout(side)
-        sl.setContentsMargins(0, 0, 4, 0)
-        sl.setSpacing(12)
+        # ---- side panel: four tabs so nothing important sits at the bottom of a long scroll
+        pages = {}
+
+        def page():
+            w = QWidget()
+            w.setStyleSheet("background:transparent;")
+            lo = QVBoxLayout(w)
+            lo.setContentsMargins(0, 0, 4, 0)
+            lo.setSpacing(10)
+            return w, lo
+        dev_w, dev_l = page()
+        pow_w, pow_l = page()
+        met_w, met_l = page()
+        grd_w, grd_l = page()
+        sl = pow_l
 
         card, lo = _card("LIVE LOAD")
         self.load_lbl = QLabel()
@@ -336,7 +351,21 @@ class SmartHomeView(QWidget):
         self.tariff.valueChanged.connect(self._power_changed)
         sl.addWidget(card)
 
-        self._build_energy_cards(sl)
+        self._build_energy_cards(met_l, grd_l)
+        sl = dev_l
+
+        # the everyday buttons first
+        row = QHBoxLayout()
+        off = QPushButton(" All off")
+        off.setIcon(get_icon("power", "#e2e8f0", 13))
+        off.setToolTip("Switch everything off except the fridge")
+        off.clicked.connect(self._all_off)
+        add = QPushButton(" Add appliance")
+        add.setIcon(get_icon("plus", "#e2e8f0", 13))
+        add.clicked.connect(self._add_device)
+        row.addWidget(off)
+        row.addWidget(add)
+        sl.addLayout(row)
 
         card, lo = _card("ROOMS")
         self.rooms_box = QVBoxLayout()
@@ -348,29 +377,35 @@ class SmartHomeView(QWidget):
         self.dev_box = QVBoxLayout()
         self.dev_box.setSpacing(4)
         lo.addLayout(self.dev_box)
-        row = QHBoxLayout()
-        add = QPushButton(" Add appliance")
-        add.setIcon(get_icon("plus", "#e2e8f0", 13))
-        add.clicked.connect(self._add_device)
-        off = QPushButton(" All off")
-        off.setIcon(get_icon("power", "#e2e8f0", 13))
-        off.setToolTip("Switch everything off except the fridge")
-        off.clicked.connect(self._all_off)
-        row.addWidget(add)
-        row.addWidget(off)
-        lo.addLayout(row)
         sl.addWidget(card)
-        sl.addStretch(1)
+        for lo_ in (dev_l, pow_l, met_l, grd_l):
+            lo_.addStretch(1)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setFixedWidth(330)
-        scroll.setWidget(side)
-        body.addWidget(scroll)
+        side = QWidget()
+        side.setFixedWidth(340)
+        side.setStyleSheet("background:transparent;")
+        sv = QVBoxLayout(side)
+        sv.setContentsMargins(0, 0, 0, 0)
+        sv.setSpacing(10)
+        self.side_tabs = Segmented([("devices", "home", "Devices"), ("power", "zap", "Power"),
+                                    ("meter", "calculator", "Meter"), ("grid", "activity", "Grid")])
+        sv.addWidget(self.side_tabs)
+        self.side_stack = QStackedWidget()
+        for key, w in (("devices", dev_w), ("power", pow_w), ("meter", met_w), ("grid", grd_w)):
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            scroll.setStyleSheet("QScrollArea{background:transparent;border:none;}")
+            scroll.setWidget(w)
+            pages[key] = scroll
+            self.side_stack.addWidget(scroll)
+        self.side_tabs.changed.connect(lambda k: self.side_stack.setCurrentWidget(pages[k]))
+        sv.addWidget(self.side_stack, 1)
+        body.addWidget(side)
         main.addLayout(body, 1)
 
-    def _build_energy_cards(self, sl):
+    def _build_energy_cards(self, sl, grid_lo):
         card, lo = _card("PREPAID METER")
         self.meter_big = QLabel()
         self.meter_big.setStyleSheet(_BIG)
@@ -415,6 +450,7 @@ class SmartHomeView(QWidget):
         lo.addWidget(log_bat)
         sl.addWidget(card)
 
+        sl = grid_lo
         card, lo = _card("GRID SUPPLY")
         self.grid_big = QLabel()
         self.grid_big.setStyleSheet(_BIG)
@@ -485,8 +521,10 @@ class SmartHomeView(QWidget):
             val.setStyleSheet("color:#e2e8f0;font-size:12px;font-weight:700;background:transparent;")
             bar = QProgressBar()
             bar.setTextVisible(False)
-            bar.setFixedHeight(6)
+            bar.setFixedHeight(4)
             bar.setValue(int(rl / top * 100))
+            bar.setStyleSheet("QProgressBar{background:rgba(255,255,255,0.06);border:none;border-radius:2px;}"
+                              "QProgressBar::chunk{background:#ff7a1a;border-radius:2px;}")
             row = QHBoxLayout()
             row.addWidget(btn, 1)
             row.addWidget(val)
@@ -616,11 +654,23 @@ class SmartHomeView(QWidget):
         while layout.count():
             item = layout.takeAt(0)
             if item.widget():
+                # hide now: deleteLater alone leaves the old row painted until the next event pass
+                item.widget().hide()
+                item.widget().setParent(None)
                 item.widget().deleteLater()
             elif item.layout():
                 SmartHomeView._clear(item.layout())
 
     # ------------------------------------------------------------- actions --
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        compact = self.width() < 1180
+        self.title_lbl.setVisible(self.width() >= 980)
+        if compact != self._compact_bar:
+            self._compact_bar = compact
+            for b, text in self._toolbar_btns:
+                b.setText("" if compact else text)
 
     def _toggle(self, item_id):
         self.model.toggle(item_id)
