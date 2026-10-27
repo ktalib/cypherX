@@ -10,6 +10,8 @@ smart home — http://<server-ip>:8080.
   • JSON API backed by an `api` object (see app/server/home_api.py) that does the
     real work on the GUI thread
   • a single-page, phone-first UI in app/server/static/index.html
+  • the assistant: typed questions (POST /api/assistant) and recordings from the
+    phone's mic (POST /api/assistant/audio, any audio/* the browser records)
   • refuses to start while the admin account still has the default password
 
 Standard library only (http.server) — nothing extra to install.
@@ -196,6 +198,8 @@ class WebApp:
                 return api.server()
             if parts == ["phonecam"]:
                 return {"https_port": self.https_port}
+            if parts == ["assistant"]:
+                return api.assistant_info()
             if parts == ["fridge"]:
                 return api.fridge()
             if parts == ["fridge", "photo.jpg"]:
@@ -203,6 +207,10 @@ class WebApp:
                 if not data:
                     raise ApiError(404, "No fridge photo yet")
                 return ("image/jpeg", data)
+        if method == "POST" and path == "/api/assistant/audio":
+            if not body:
+                raise ApiError(400, "No recording")
+            return _reply_json(api.assistant_audio(body, user["username"]))
         if method == "POST" and is_image_upload(method, path):
             if not body:
                 raise ApiError(400, "No picture")
@@ -216,6 +224,11 @@ class WebApp:
                 return api.toggle(parts[1], who)
             if parts == ["alloff"]:
                 return api.all_off(who)
+            if parts == ["assistant"]:
+                text = " ".join(str(data.get("text") or "").split())[:300]
+                if not text:
+                    raise ApiError(400, "Say or type something")
+                return _reply_json(api.assistant_ask(text, who))
             if parts == ["arm"]:
                 return api.set_armed(bool(data.get("on")), who)
             if parts == ["meter", "reading"]:
@@ -239,6 +252,15 @@ class WebApp:
             if len(parts) == 3 and parts[0] == "fridge" and parts[2] == "set":
                 return api.fridge_set(parts[1], int(_number(data, "count", 0, 999)), who)
         raise ApiError(404, "Not found")
+
+
+def _reply_json(reply):
+    """An assistant reply for the browser: a picture becomes a link to the snapshot."""
+    out = {k: reply.get(k) for k in ("heard", "say", "did")}
+    out["did"] = out["did"] or []
+    if reply.get("photo"):
+        out["image"] = f"/api/snapshot.jpg?t={int(time.time())}"
+    return out
 
 
 def _need_root(user):
@@ -275,6 +297,15 @@ class _Server(ThreadingHTTPServer):
         pass                          # dropped connections / refused certificates are normal here
 
 
+def upload_type(method, path):
+    """Routes that take a raw body instead of JSON: the content type they want, else None."""
+    if method != "POST":
+        return None
+    if path == "/api/assistant/audio":
+        return "audio/"
+    return "image/jpeg" if is_image_upload(method, path) else None
+
+
 def is_image_upload(method, path):
     """Routes that take a raw JPEG body: phone camera frames and fridge photos."""
     if method != "POST":
@@ -290,7 +321,8 @@ def make_handler(app):
 
         def _serve(self, method):
             url = urlparse(self.path)
-            frame = is_image_upload(method, url.path)
+            raw = upload_type(method, url.path)
+            frame = raw is not None
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
@@ -300,7 +332,7 @@ def make_handler(app):
                 return
             body = self.rfile.read(length) if length else b""
             ctype_in = self.headers.get("Content-Type") or ""
-            want = "image/jpeg" if frame else "application/json"
+            want = raw or "application/json"
             if method == "POST" and body and want not in ctype_in:
                 status, ctype, payload, cookie = 415, "application/json", \
                     json.dumps({"error": f"Send {want}"}).encode(), None

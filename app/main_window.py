@@ -248,6 +248,7 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         menu.addAction("Show CYPHER-X", self._show_from_tray)
         menu.addAction("Lock", self.lock)
+        menu.addAction("Talk to CYPHER-X", lambda: (self._show_from_tray(), self.talk()))
         menu.addAction("Play / Pause Music", self.view_widget_screen.music.toggle_play)
         menu.addSeparator()
         menu.addAction("Quit", self.quit_app)
@@ -284,6 +285,14 @@ class MainWindow(QMainWindow):
         shortcut_esc.activated.connect(self._exit_fullscreen)
 
         QShortcut(QKeySequence("Ctrl+L"), self).activated.connect(self.lock)
+        QShortcut(QKeySequence("Ctrl+Space"), self).activated.connect(self.talk)
+
+    def talk(self):
+        """Open the assistant and start listening (mic button, Ctrl+Space, tray)."""
+        if self._locked:
+            return
+        self.assistant_panel.popup()
+        self.voice.listen()
 
     def _toggle_fullscreen(self):
         # The Home widget screen goes fully immersive; other modules just go full screen
@@ -419,6 +428,16 @@ class MainWindow(QMainWindow):
         self.home_api = HomeApi(self, self.bridge)
         self.services.register(WebService(self.auth, self.home_api))
         self.services.register(TelegramService(self.home_api, bus))
+
+        # The assistant: phone, Telegram and the PC microphone all go through it
+        from app.services import assistant as assistant_core, vision_ai as _vai
+        from app.views.assistant import VoiceController, AssistantPanel
+        db = Database.get_instance()
+        self.assistant = assistant_core.Assistant(self.home_api, lambda: assistant_core.load_settings(db),
+                                                  lambda: _vai.load_settings(db))
+        self.voice = VoiceController(self.assistant, self.home_api, self)
+        self.assistant_panel = AssistantPanel(self.voice, self, self.centralWidget())
+        self.status_bar.mic_btn.clicked.connect(self.talk)
         netwatch = self.services.register(NetWatchService(bus))
 
         def mark_on_wifi_list(dev):

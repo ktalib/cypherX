@@ -171,6 +171,32 @@ themselves — press **Start discovery**:
   (and warns if the door is left open). Firmware and fitting tips in [`firmware/fridge_cam`](firmware/fridge_cam/README.md);
   turn it on in Server → Services → Fridge camera.
 
+## Voice assistant
+
+Talk to the house from the PC, your phone or Telegram — in plain English:
+"turn off the TV", "switch on the bedroom light", "all off", "is there light?", "how many units are left?",
+"how long will the battery last?", "how many eggs are left?", "I took two eggs", "what's on?", "arm the cameras",
+"show me the front door camera", "what's the weather?".
+
+- **On the PC:** the **Ask** button in the top bar or **Ctrl+Space** opens the assistant and listens.
+  Answers are spoken with the Windows voice (pick the voice and speed in settings). You can also type.
+- **Wake phrase (optional):** turn on *Listen for the wake phrase* and say it to start without touching the PC —
+  "Hey Cypher, turn off the TV". **The phrase is yours to choose** (any 2–3 words: "Okay House", "Jarvis"…).
+- **On the phone:** the orange mic button on the web dashboard. It needs the secure page
+  (`https://<PC IP>:8443`) because phones only allow the microphone there.
+- **Telegram:** send the bot a voice note, or just write ("is there light?") — no slash needed.
+- **Understanding speech** (Assistant settings → Hearing):
+  - *Offline on this PC (Whisper)* — free and private: `pip install faster-whisper`; the model
+    (75–480 MB) downloads once on first use. "Base" is a good balance; "Small" is the most accurate.
+  - *Groq Whisper* — free tier, fastest on a slow PC (the recording is sent to Groq).
+  - The phone uses the PC's engine when it's set up, otherwise Chrome's own recogniser (English – Nigeria).
+- **Smart answers (optional):** everyday commands work offline with no AI. For anything else ("it's hot in
+  here", "will the battery last the night?") pick an AI — the same providers as the fridge (Gemini and Groq
+  free tiers, Ollama offline, Claude, OpenAI…), sharing the same keys. The AI can switch appliances, arm the
+  cameras and update the fridge, but can never disarm.
+- **Voice PIN:** disarming the cameras by voice needs a PIN ("disarm 4 8 1 5"), so nobody can shout it
+  through a window. Five wrong PINs lock voice disarm for 10 minutes.
+
 ## App-wide Experience
 
 - Every tool page sits on a blurred, darkened copy of the current Home wallpaper (liquid-glass look); darkness is adjustable in Settings.

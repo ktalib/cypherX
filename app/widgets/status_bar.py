@@ -1,7 +1,7 @@
 import time
 from datetime import datetime
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget, QPushButton
 from app.config import (
     COLOR_BORDER_MUTED, COLOR_CYAN, COLOR_GREEN, COLOR_TEXT_PRIMARY,
     COLOR_TEXT_SECONDARY, COLOR_PANEL_ALT, FONT_FAMILY_DISPLAY
@@ -95,7 +95,18 @@ class TopStatusBar(QFrame):
 
         layout.addWidget(self._create_separator())
 
-        # 5. Live Digital Clock Pill with vector icon
+        # 5. Talk to the assistant (main window connects it)
+        self.mic_btn = QPushButton(" Ask")
+        self.mic_btn.setIcon(get_icon("mic", "#ffa25c", 14))
+        self.mic_btn.setToolTip("Talk to CYPHER-X (Ctrl+Space)")
+        self.mic_btn.setCursor(Qt.PointingHandCursor)
+        self.mic_btn.setStyleSheet(
+            "QPushButton{background:rgba(255,122,26,0.14);color:#ffd2ad;border:1px solid rgba(255,122,26,0.35);"
+            "border-radius:12px;padding:3px 12px;font-size:11px;font-weight:700;}"
+            "QPushButton:hover{background:rgba(255,122,26,0.26);}")
+        layout.addWidget(self.mic_btn)
+
+        # 6. Live Digital Clock Pill with vector icon
         clock_box = QHBoxLayout()
         clock_box.setSpacing(6)
 
@@ -118,6 +129,12 @@ class TopStatusBar(QFrame):
         layout.addWidget(clock_pill)
 
         self._update_time()
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        # laptop widths: drop the least useful text so the clock and Ask button keep their room
+        self.host_lbl.setVisible(self.width() >= 1250)
+        self.session_lbl.setVisible(self.width() >= 1150)
 
     def _create_separator(self) -> QLabel:
         sep = QLabel("•")

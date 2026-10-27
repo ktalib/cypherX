@@ -5,3 +5,4 @@ cryptography>=42.0     # Tuya discovery broadcasts (v3.3+), HTTPS certificate fo
 zeroconf>=0.130        # finds Shelly, ESPHome, Sonoff, HomeKit devices (mDNS)
 tinytuya>=1.13         # switches Tuya / Smart Life plugs and reads their watts (local)
 anthropic>=1.15        # optional: only for Claude as the fridge photo AI
+faster-whisper>=1.1      # optional: offline speech for the voice assistant (downloads its model on first use)
