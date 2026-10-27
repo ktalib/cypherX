@@ -7,13 +7,15 @@ few painted controls shared by every page:
   Toggle      the on/off switch used for appliances
   ArcDial     a 240° dial (live load against the inverter, like a thermostat)
   WeekBars    seven rounded bars (e.g. hours without grid per day)
+  Segmented   a row of tabs that shrinks to icons when there isn't room for the words
 
 `apply_home_style(widget)` gives a page the warm background and card styling without
 touching the Server console, which keeps its own look.
 """
 from PySide6.QtCore import Qt, QRectF, QPointF, QVariantAnimation, QEasingCurve, Signal, QSize
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QConicalGradient, QBrush
-from PySide6.QtWidgets import QAbstractButton, QWidget, QToolTip, QSizePolicy
+from PySide6.QtWidgets import (QAbstractButton, QWidget, QToolTip, QSizePolicy, QFrame, QHBoxLayout, QPushButton,
+                               QButtonGroup)
 
 # ------------------------------------------------------------------ tokens --
 ACCENT = "#ff7a1a"          # warm orange: on, selected, primary
@@ -299,3 +301,80 @@ class Clickable(QWidget):
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.LeftButton and self.rect().contains(e.position().toPoint()):
             self.clicked.emit()
+
+
+class Segmented(QFrame):
+    """Tabs as one rounded bar of buttons. Shows icon + word while it fits and drops the words
+    (keeping a tooltip) when the bar gets narrow, so it never clips or scrolls."""
+    changed = Signal(str)
+
+    def __init__(self, items, parent=None, height=36):
+        """items: [(key, icon name, label)]"""
+        super().__init__(parent)
+        from app.icons import get_icon
+        self._get_icon = get_icon
+        self.setObjectName("segmented")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet("QFrame#segmented{background:rgba(255,255,255,0.05);"
+                           "border:1px solid rgba(255,255,255,0.07);border-radius:14px;}")
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        lo = QHBoxLayout(self)
+        lo.setContentsMargins(4, 4, 4, 4)
+        lo.setSpacing(4)
+        self.group = QButtonGroup(self)
+        self.group.setExclusive(True)
+        self.buttons = {}
+        self._items = items
+        for key, icon, text in items:
+            b = QPushButton(text)
+            b.setCheckable(True)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setMinimumHeight(height)
+            b.setToolTip(text)
+            b.setAccessibleName(text)
+            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            b.setStyleSheet(f"QPushButton{{background:transparent;color:{SOFT};border:none;border-radius:10px;"
+                            f"padding:0 10px;font-weight:600;}}"
+                            f"QPushButton:hover{{background:rgba(255,255,255,0.07);}}"
+                            f"QPushButton:checked{{background:{ACCENT};color:{ON_ACCENT};font-weight:700;}}")
+            b.toggled.connect(lambda on, k=key: self._toggled(k, on))
+            self.group.addButton(b)
+            self.buttons[key] = b
+            lo.addWidget(b)
+        self._compact = None
+        self.current = None
+        self._paint_icons()
+        if items:
+            self.select(items[0][0])
+
+    def select(self, key):
+        if key in self.buttons:
+            self.buttons[key].setChecked(True)
+
+    def _toggled(self, key, on):
+        self._paint_icons()
+        if on and key != self.current:
+            self.current = key
+            self.changed.emit(key)
+
+    def _paint_icons(self):
+        icons = {k: i for k, i, _ in self._items}
+        for key, b in self.buttons.items():
+            b.setIcon(self._get_icon(icons[key], ON_ACCENT if b.isChecked() else SOFT, 15))
+
+    def _full_width(self):
+        """Width needed to show every word: text + icon + padding per button, plus the gaps."""
+        from PySide6.QtGui import QFontMetrics
+        f = self.font()
+        f.setBold(True)
+        fm = QFontMetrics(f)
+        per = [fm.horizontalAdvance(f" {text}") + 15 + 6 + 24 for _k, _i, text in self._items]
+        return sum(per) + 8 + 4 * (len(per) - 1)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        compact = self.width() < self._full_width()
+        if compact != self._compact:
+            self._compact = compact
+            for key, _icon, text in self._items:
+                self.buttons[key].setText("" if compact else f" {text}")

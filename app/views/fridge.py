@@ -272,13 +272,7 @@ class FridgeView(QWidget):
         lo.addLayout(add)
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(["Item", "In fridge", "Uses", "Runs out", "", "", ""])
-        hh = self.table.horizontalHeader()
-        hh.setMinimumSectionSize(30)
-        hh.setSectionResizeMode(COL_NAME, QHeaderView.Stretch)
-        for c, w in ((COL_COUNT, 66), (COL_RATE, 70), (COL_LEFT, 70), (COL_MINUS, 30), (COL_PLUS, 30),
-                     (COL_MORE, 30)):
-            hh.setSectionResizeMode(c, QHeaderView.Fixed)
-            self.table.setColumnWidth(c, w)
+        self._size_columns()
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionMode(QAbstractItemView.NoSelection)
@@ -321,7 +315,17 @@ class FridgeView(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
+        self._size_columns()        # the main window's restyle can reset the header to default widths
         self.refresh()
+
+    def _size_columns(self):
+        hh = self.table.horizontalHeader()
+        hh.setMinimumSectionSize(30)
+        hh.setSectionResizeMode(COL_NAME, QHeaderView.Stretch)
+        for c, w in ((COL_COUNT, 66), (COL_RATE, 70), (COL_LEFT, 70), (COL_MINUS, 34), (COL_PLUS, 34),
+                     (COL_MORE, 34)):
+            hh.setSectionResizeMode(c, QHeaderView.Fixed)
+            self.table.setColumnWidth(c, w)
 
     def refresh(self):
         self._shown_version = self.store.version
@@ -369,7 +373,7 @@ class FridgeView(QWidget):
                 b.setToolTip(tip)
                 b.setCursor(Qt.PointingHandCursor)
                 b.setStyleSheet("QPushButton{background:transparent;border:none;color:#e2e8f0;font-size:16px;"
-                                "font-weight:700;}"
+                                "font-weight:700;padding:0;min-width:0;}"
                                 "QPushButton:hover{background:rgba(255,255,255,0.08);border-radius:6px;}")
                 b.clicked.connect(slot)
                 self.table.setCellWidget(r, col, b)
