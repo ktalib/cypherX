@@ -57,7 +57,7 @@
   .muted { color: var(--muted); } .soft { color: var(--soft); }
 
   /* ---------- layout ---------- */
-  .app { min-height: 100vh; padding-bottom: calc(var(--tab-h) + var(--safe-b) + 16px); }
+  .app { min-height: 100vh; padding-bottom: calc(var(--tab-h) + var(--safe-b) + 84px); }   /* room for the mic button */
   header.top { position: sticky; top: 0; z-index: 20; padding: calc(10px + var(--safe-t)) 16px 10px;
     background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: saturate(160%) blur(16px);
     -webkit-backdrop-filter: saturate(160%) blur(16px); border-bottom: 1px solid var(--line); }
@@ -223,11 +223,45 @@
   .fr-add #frName { flex: 1; min-width: 0; }
   .fr-add #frCount { width: 78px; flex: none; }
   .fr-add .btn { width: auto; padding: 12px 18px; flex: none; }
-  .pc-pill { position: fixed; z-index: 31; right: 14px; bottom: calc(var(--tab-h) + var(--safe-b) + 12px); display: inline-flex; gap: 6px;
+  .pc-pill { position: fixed; z-index: 31; left: 14px; bottom: calc(var(--tab-h) + var(--safe-b) + 12px); display: inline-flex; gap: 6px;
     align-items: center; padding: 8px 12px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 12px; font-weight: 700;
     box-shadow: 0 6px 20px rgba(0,0,0,.35); border: none; }
   .pc-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: pulse 1.4s infinite; }
   .cam .empty { position: absolute; inset: 0; display: grid; place-items: center; color: #64748b; font-size: 13px; }
+
+
+  /* ---------- assistant ---------- */
+  .ask-fab { position: fixed; z-index: 32; right: 16px; bottom: calc(var(--tab-h) + var(--safe-b) + 14px); width: 56px; height: 56px;
+    border-radius: 50%; background: linear-gradient(135deg, var(--accent2), var(--accent)); color: var(--accent-ink); display: grid;
+    place-items: center; box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .ask-fab:active { transform: scale(.94); }
+  .ask-fab .ic { width: 24px; height: 24px; }
+  .ask-sheet { max-height: 86vh; display: flex; flex-direction: column; }
+  .ask-head { display: flex; align-items: center; gap: 10px; }
+  .ask-head .grow { flex: 1; min-width: 0; }
+  .ask-head b { font-size: 17px; } .ask-head small { display: block; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .ask-log { flex: 1; min-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 14px 2px;
+    overscroll-behavior: contain; }
+  .bub { max-width: 84%; padding: 9px 13px; border-radius: 16px; font-size: 14px; line-height: 1.4; background: var(--surface2); align-self: flex-start; }
+  .bub.me { align-self: flex-end; background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .bub.err { background: color-mix(in srgb, var(--bad) 14%, var(--surface)); }
+  .bub img { display: block; width: 100%; max-width: 360px; border-radius: 10px; margin-top: 8px; }
+  .bub .did { display: block; margin-top: 4px; font-size: 11px; font-weight: 700; color: var(--good); }
+  .ask-sugg { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+  .ask-sugg button { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700;
+    background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); }
+  .ask-row { display: flex; gap: 8px; align-items: center; }
+  .ask-row input { flex: 1; min-width: 0; padding: 12px 14px; font-size: 16px; border-radius: 999px; }
+  .ask-mic { flex: none; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    display: grid; place-items: center; position: relative; }
+  .ask-mic.rec { background: var(--bad); color: #fff; }
+  .ask-mic.rec::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 3px solid var(--bad);
+    opacity: .5; animation: pulse 1.2s infinite; }
+  .ask-mic:disabled { opacity: .5; }
+  .ask-send { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--surface2); display: grid; place-items: center; }
+  .ask-note { font-size: 12px; color: var(--muted); padding: 2px 4px 8px; }
+  .ask-note a { color: var(--accent); font-weight: 700; }
+  @media (min-width: 960px) { .ask-fab { bottom: 24px; right: 24px; } }
 
   /* ---------- bottom tabs / side rail ---------- */
   nav.tabs { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; height: calc(var(--tab-h) + var(--safe-b));
@@ -284,7 +318,7 @@
   }
   @media (min-width: 960px) {
     :root { --tab-h: 0px; }
-    .app { padding-left: 232px; padding-bottom: 24px; }
+    .app { padding-left: 232px; padding-bottom: 96px; }
     nav.tabs { top: 0; right: auto; width: 232px; height: auto; flex-direction: column; justify-content: flex-start;
       gap: 4px; padding: 20px 12px; border-top: none; border-right: 1px solid var(--line); }
     nav.tabs .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 18px; font-weight: 800; letter-spacing: 2px;
@@ -330,6 +364,10 @@
   <symbol id="i-storm" viewBox="0 0 24 24"><path d="M6 16.3A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 .5 9"/><path d="m13 12-3 5h4l-3 5"/></symbol>
   <symbol id="i-fog" viewBox="0 0 24 24"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M16 17H7M17 21H9"/></symbol>
   <symbol id="i-max" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
   <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M2 2l20 20"/><path d="M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5.2-2.8M19 13a10 10 0 0 0-2.2-1.6M12 20h.01"/></symbol>
 </svg>
 
@@ -581,6 +619,29 @@
     <button class="btn ghost" type="button" id="sheetCancel">Cancel</button>
   </form>
 </div>
+<!-- assistant -->
+<button class="ask-fab hidden" id="askFab" aria-label="Talk to CYPHER-X"><svg class="ic"><use href="#i-mic"/></svg></button>
+<div class="scrim" id="askScrim"></div>
+<div class="sheet ask-sheet" id="askSheet" role="dialog" aria-modal="true" aria-label="Assistant">
+  <div class="grabber"></div>
+  <div class="ask-head">
+    <div class="grow"><b>Assistant</b><small id="askState">Tap the mic and speak</small></div>
+    <button class="icon-btn" id="askClose" aria-label="Close"><svg class="ic sm"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="ask-log" id="askLog" aria-live="polite">
+    <div class="bub">Hi! Ask me to switch things, or about light, units, battery, the fridge or the weather.</div>
+  </div>
+  <div class="ask-note hidden" id="askNote"></div>
+  <div class="ask-sugg" id="askSugg">
+    <button>Is there light?</button><button>What's on?</button><button>Units left</button>
+    <button>How long will the battery last?</button><button>All off</button>
+  </div>
+  <form class="ask-row" id="askForm" autocomplete="off">
+    <input id="askText" placeholder="Type or tap the mic" enterkeyhint="send" aria-label="Ask">
+    <button class="ask-send" type="submit" aria-label="Send"><svg class="ic sm"><use href="#i-send"/></svg></button>
+    <button class="ask-mic" type="button" id="askMic" aria-label="Speak"><svg class="ic"><use href="#i-mic"/></svg></button>
+  </form>
+</div>
 <div class="banner hidden" id="offline"><svg class="ic sm"><use href="#i-wifi-off"/></svg><span>Can't reach CYPHER-X — retrying…</span></div>
 <div class="toast" id="toast" role="status"></div>
 <button class="pc-pill hidden" id="pcPill" data-go="security">Phone camera on</button>
@@ -621,11 +682,13 @@ function showLogin() {
   clearInterval(timer); me = null;
   if (pc.run) pcStop(false);
   $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+  $("askFab").classList.add("hidden"); if ($("askSheet").classList.contains("open")) closeAsk();
   setTimeout(() => $("u").focus(), 50);
 }
 function showApp() {
   $("login").classList.add("hidden"); $("app").classList.remove("hidden");
   $("tabServer").classList.toggle("hidden", me.role !== "root");
+  $("askFab").classList.remove("hidden");
   $("avatar").textContent = (me.username || "?")[0].toUpperCase();
   const h = new Date().getHours();
   $("greet").textContent = (h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening") + ", " + me.username;
@@ -1082,6 +1145,119 @@ $("meterForm").addEventListener("submit", async (e) => {
     closeSheet(); refresh();
   } catch (err) { quiet(err); }
 });
+
+/* ---------------- assistant ---------------- */
+// Speech goes to the PC's own Whisper when it is set up (private, any phone), otherwise to the
+// browser's recogniser (Chrome: lang en-NG). Both need the secure (https) page for the mic.
+const ask = { info: null, rec: null, recog: null, busy: false, stream: null };
+async function askInfo() { if (!ask.info) { try { ask.info = await api("assistant"); } catch (e) { ask.info = {}; } } return ask.info; }
+function askState(t) { $("askState").textContent = t; }
+function bubble(text, cls = "", extra = "") {
+  const b = document.createElement("div"); b.className = "bub " + cls; b.innerHTML = esc(text) + extra;
+  $("askLog").appendChild(b); $("askLog").scrollTop = $("askLog").scrollHeight; return b; }
+function openAsk() { $("askScrim").classList.add("open"); $("askSheet").classList.add("open"); askInfo(); askMicCheck(); }
+function closeAsk() { askStop(true); $("askScrim").classList.remove("open"); $("askSheet").classList.remove("open");
+  try { speechSynthesis.cancel(); } catch (e) {} }
+function speak(text) {
+  if (!ask.info || ask.info.speak === false || !window.speechSynthesis || !text) return;
+  try { const u = new SpeechSynthesisUtterance(text.replace(/₦/g, "naira ")); u.lang = ask.info.lang || "en-NG";
+    speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
+}
+function showReply(r) {
+  const did = r.did && r.did.length ? `<span class="did">✓ ${esc(r.did.join(" · "))}</span>` : "";
+  const img = r.image ? `<img src="${esc(r.image)}" alt="Camera picture">` : "";
+  bubble(r.say || "Okay.", "", did + img); speak(r.say);
+  if (r.did && r.did.length) refresh();
+}
+async function askSend(text) {
+  text = (text || "").trim(); if (!text || ask.busy) return;
+  bubble(text, "me"); ask.busy = true; askState("Thinking…");
+  try { showReply(await api("assistant", {text})); } catch (e) { if (e.message !== "signed out") bubble(e.message, "err"); }
+  finally { ask.busy = false; askState("Tap the mic and speak"); }
+}
+async function askMicCheck() {
+  const secure = window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+  if (secure) { $("askNote").classList.add("hidden"); return; }
+  $("askMic").disabled = true;
+  let link = "";
+  try { const r = await api("phonecam"); if (r.https_port) link = `https://${location.hostname}:${r.https_port}/`; } catch (e) {}
+  $("askNote").innerHTML = link ? `Phones only allow the microphone on the secure page. <a href="${link}">Open it</a>, accept the
+    one-time certificate warning and sign in — or just type below.` : "The microphone needs the secure page (turn on the Secure "
+    + "port in CYPHER-X → Services → Web dashboard). You can type instead.";
+  $("askNote").classList.remove("hidden");
+}
+async function askMic() {
+  tap();
+  if (ask.rec || ask.recog) { askStop(false); return; }
+  const info = await askInfo();
+  try { speechSynthesis.cancel(); } catch (e) {}
+  const Recog = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (info.stt_ready && window.MediaRecorder) return askRecord();
+  if (Recog) return askRecognise(Recog);
+  bubble(info.stt_why ? "Voice isn't set up: " + info.stt_why : "This browser can't do voice. Try Chrome, or type.", "err");
+}
+function askRecognise(Recog) {
+  const r = new Recog(); ask.recog = r; r.lang = (ask.info && ask.info.lang) || "en-NG"; r.interimResults = true; r.maxAlternatives = 1;
+  let said = "", live = null;
+  $("askMic").classList.add("rec"); askState("Listening…");
+  r.onresult = (e) => { said = Array.from(e.results).map(x => x[0].transcript).join(" ");
+    if (!live) live = bubble("", "me"); live.textContent = said; };
+  r.onerror = (e) => { if (e.error === "not-allowed") bubble("Allow the microphone for this page in the browser settings.", "err");
+    else if (e.error !== "no-speech" && e.error !== "aborted") bubble("Voice error: " + e.error, "err"); };
+  r.onend = () => { ask.recog = null; $("askMic").classList.remove("rec"); askState("Tap the mic and speak");
+    if (live) live.remove(); if (said.trim()) askSend(said); };
+  r.start();
+}
+async function askRecord() {
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true}}); }
+  catch (e) { bubble("Allow the microphone for this page in the browser settings.", "err"); return; }
+  ask.stream = stream;
+  const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find(t => MediaRecorder.isTypeSupported(t)) || "";
+  const rec = new MediaRecorder(stream, type ? {mimeType: type} : {}); ask.rec = rec;
+  const chunks = []; rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  // stop by itself after a pause (or 10 s), like a voice assistant
+  let ctx, stopT, heard = false, quietSince = 0;
+  try {
+    ctx = new (window.AudioContext || window.webkitAudioContext)(); const an = ctx.createAnalyser(); an.fftSize = 1024;
+    ctx.createMediaStreamSource(stream).connect(an); const buf = new Uint8Array(an.fftSize);
+    const loop = () => { if (rec.state !== "recording") return; an.getByteTimeDomainData(buf);
+      let sum = 0; for (const v of buf) sum += (v - 128) * (v - 128); const lvl = Math.sqrt(sum / buf.length);
+      const now = performance.now(); if (lvl > 8) { heard = true; quietSince = now; }
+      else if (heard && now - quietSince > 1300) { askStop(false); return; }
+      requestAnimationFrame(loop); };
+    quietSince = performance.now(); requestAnimationFrame(loop);
+  } catch (e) {}
+  stopT = setTimeout(() => askStop(false), 10000);
+  rec.onstop = async () => {
+    clearTimeout(stopT); try { ctx && ctx.close(); } catch (e) {}
+    stream.getTracks().forEach(t => t.stop()); ask.stream = null;
+    $("askMic").classList.remove("rec");
+    const cancelled = ask.rec === "cancel"; ask.rec = null;
+    if (cancelled || !chunks.length) { askState("Tap the mic and speak"); return; }
+    const blob = new Blob(chunks, {type: rec.mimeType || type || "audio/webm"});
+    askState("Thinking…"); ask.busy = true;
+    try {
+      const r = await fetch("/api/assistant/audio", {method: "POST", headers: {"Content-Type": blob.type || "audio/webm"}, body: blob});
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || ("Error " + r.status));
+      if (data.heard) bubble(data.heard, "me");
+      showReply(data);
+    } catch (e) { bubble(e.message, "err"); }
+    finally { ask.busy = false; askState("Tap the mic and speak"); }
+  };
+  rec.start(); $("askMic").classList.add("rec"); askState("Listening… (tap to stop)");
+}
+function askStop(cancel) {
+  if (ask.recog) { cancel ? ask.recog.abort() : ask.recog.stop(); }
+  if (ask.rec && ask.rec !== "cancel" && ask.rec.state === "recording") { const r = ask.rec; if (cancel) ask.rec = "cancel"; r.stop(); }
+}
+$("askFab").onclick = () => { tap(); openAsk(); };
+$("askClose").onclick = closeAsk; $("askScrim").onclick = closeAsk;
+$("askMic").onclick = askMic;
+$("askForm").addEventListener("submit", (e) => { e.preventDefault(); const t = $("askText").value; $("askText").value = ""; askSend(t); });
+$("askSugg").querySelectorAll("button").forEach(b => b.onclick = () => askSend(b.textContent));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAsk(); });
 
 api("me").then(r => { me = r.user; showApp(); }).catch(() => showLogin());
 </script>

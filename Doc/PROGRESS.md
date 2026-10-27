@@ -42,7 +42,8 @@ home's power system, cameras and (soon) smart plugs.
 | 11 | 19 Oct | [#9](https://github.com/ktalib/cypherX/pull/9) | **Fridge stock** — counts for a fridge that isn't smart: bought groceries add stock, AI photo checks correct it (Gemini, OpenRouter, Groq, Ollama — free; Claude, OpenAI — paid; backup provider), usage rates, "runs out in", low alerts onto the shopping list; on the desktop, phone dashboard (Fridge tab) and Telegram (send a photo, /fridge, /took, /add); optional ESP32-S3 fridge camera service + firmware |
 | 12 | 22 Oct | _not opened yet_ (branch `claude/wizardly-turing-ahgl2u`) | **Inverter measured with two smart plugs** — grid side (power cuts without the laptop charger, charging watts) and house side (real load used for runtime and % of inverter); never switched; [hardware guide and shopping list](HARDWARE.md) |
 | 13 | 22 Oct | _same branch_ | **New look for the Smart Home, desktop and phone** — warm graphite + orange design system; Home Dashboard rebuilt around the 3D house with floating live stats, a rooms panel with toggles, power dial, live camera card, power cuts this week, meter / fridge / energy cards; weather + solar outlook (Open-Meteo); phone dashboard redesigned to match, with a light/dark button |
-| 14 | 27 Oct | _this branch_ | **Smart Home usable on laptop screens** — no more scrolling to reach buttons: dashboard is the house + one tabbed panel (Devices / Power / Cameras / Energy) that fits a 1366×768 screen; tabs shrink to icons when narrow; the layout stacks below 820 px; 3D page side panel split into Devices / Power / Meter / Grid tabs with All off and Add appliance at the top; view-mode switch is a segmented control; Fridge stock table and Smart Devices header no longer clip |
+| 14 | 27 Oct | [#11](https://github.com/ktalib/cypherX/pull/11) | **Smart Home usable on laptop screens** — no more scrolling to reach buttons: dashboard is the house + one tabbed panel (Devices / Power / Cameras / Energy) that fits a 1366×768 screen; tabs shrink to icons when narrow; the layout stacks below 820 px; 3D page side panel split into Devices / Power / Meter / Grid tabs with All off and Add appliance at the top; view-mode switch is a segmented control; Fridge stock table and Smart Devices header no longer clip |
+| 15 | 27 Oct | _this branch_ | **Voice assistant** — talk to the house from the PC (Ask button / Ctrl+Space, spoken replies, optional wake phrase the user picks, e.g. "Hey Cypher"), the phone dashboard (mic button) and Telegram (voice notes and plain words); offline command understanding (switching, all off, light / units / battery / load / weather questions, fridge counts, arm, snapshot), offline Whisper or Groq speech-to-text, optional AI for anything else (shared fridge-AI keys, never disarms), voice PIN for disarming |
 
 ---
 
@@ -104,8 +105,8 @@ start automatically, settings, actions and its own log. A **watchdog** restarts 
 
 ## 5. Testing
 
-- **Unit tests:** 102 (fridge + AI providers 15, inverter plugs 5, weather 3, energy log 9, smart device discovery 9, plug control 8, CCTV 9, network watch + backups 7,
-  accounts/bills/groceries 6, service manager 6, Telegram 6, server checks 5, web dashboard 8, original 6). 101 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
+- **Unit tests:** 135 (voice assistant 30, fridge + AI providers 15, inverter plugs 5, weather 3, energy log 9, smart device discovery 9, plug control 8, CCTV 9, network watch + backups 7,
+  accounts/bills/groceries 6, service manager 6, Telegram 6, server checks 5, web dashboard 8, original 9). 134 pass. The one failure, `test_protected_directory_detection`, predates this work and only fails when the
   tests run on Linux (`C:\Windows` isn't an absolute path there).
 - **App checks:** each feature was run headless on a Linux cloud machine with sample data and screenshotted —
   layouts, navigation between Home and Server, sign-in, roles, lock, motion detection with synthetic frames.
@@ -118,10 +119,15 @@ start automatically, settings, actions and its own log. A **watchdog** restarts 
   broadcasts (all three formats) sent to the real UDP ports, and a fake Kasa plug answering on UDP. Plug control
   was tested end to end with a simulated Tuya plug: switching from the Smart Devices card, the web API and a
   Telegram command each switched the plug, and its measured watts replaced the rated watts in the load.
+  The voice assistant was run against the real app: 19 spoken-style commands, the desktop panel, push-to-talk and
+  wake-phrase flows with a stand-in transcriber, and the phone mic in Chromium with a fake microphone (the
+  recording reached the PC, "Hey Cypher turn off the fan" switched the fan off on the desktop). Phone (webm),
+  iPhone (mp4) and Telegram (ogg) recordings were decoded for Whisper. Whisper itself wasn't run here (the cloud
+  machine can't download its model).
 - **Not tested yet (needs the Windows laptop):** real webcam, recording, RTSP streams, charger-based power-cut
   detection, Windows notifications, the registry-based Startup Manager, everything at real screen sizes, the web
   dashboard from a real phone (Windows Firewall will ask once — allow Private networks), the real Telegram bot,
-  a network scan of the real Wi-Fi.
+  a network scan of the real Wi-Fi, the voice assistant with a real microphone, real Whisper and the Windows voices.
 
 Run the tests:
 

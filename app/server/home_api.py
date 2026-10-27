@@ -287,6 +287,41 @@ class HomeApi:
         self._log(f"Fridge: tracking {v['name']}", who)
         return {"id": v["id"], "name": v["name"]}
 
+    # ---------------------------------------------------------- assistant --
+    # Runs on the caller's thread (speech to text can take seconds); the actions
+    # inside go through the GUI-thread methods above.
+
+    def assistant_info(self):
+        from app.services import assistant, speech, vision_ai
+        db = Database.get_instance()
+        s, ai = assistant.load_settings(db), vision_ai.load_settings(db)
+        stt_ok, stt_why = speech.stt_ready(s, ai)
+        ai_ok, _ = assistant.ai_ready(s, ai)
+        return {"stt_ready": stt_ok, "stt_why": stt_why, "smart": ai_ok, "speak": bool(s.get("speak", True)),
+                "lang": s.get("lang") or "en-NG", "pin": bool(s.get("pin_hash"))}
+
+    def assistant_ask(self, text, who):
+        return self.w.assistant.ask(text, who)
+
+    def assistant_audio(self, data, who):
+        """A recording (phone or Telegram voice note) → what was heard + the answer."""
+        from app.server.web import ApiError
+        from app.services import assistant, speech, vision_ai
+        db = Database.get_instance()
+        s = assistant.load_settings(db)
+        try:
+            names = [d["name"] for d in self.status()["devices"]]
+            text = speech.transcribe(data, s, vision_ai.load_settings(db),
+                                     prompt=speech.vocabulary_prompt(names, s.get("wake_phrase") or ""))
+        except speech.SpeechError as e:
+            raise ApiError(422, str(e))
+        ok, rest = assistant.wake_match(text, s.get("wake_phrase") or "")
+        text = rest if ok and rest else text
+        if not text.strip():
+            return {"heard": "", "say": "I didn't hear anything. Try again, a little closer.", "did": [],
+                    "photo": None}
+        return self.w.assistant.ask(text, who)
+
     # -------------------------------------------------------------- money --
 
     def bills(self):

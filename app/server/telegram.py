@@ -11,7 +11,7 @@ motion with the snapshot, power cut / power back, meter running low, a
 service restarted by the watchdog, new device on the Wi-Fi, backup problems.
 
 Commands: /status /devices /on <name> /off <name> /alloff /units /arm /disarm
-/snapshot /help
+/snapshot /help — and plain words or voice notes go to the assistant.
 
 Uses the Telegram Bot API over HTTPS with the standard library (urllib).
 """
@@ -121,7 +121,8 @@ HELP = ("CYPHER-X home bot\n"
         "/snapshot – latest camera picture\n"
         "/fridge – what's in the fridge\n"
         "/took 2 eggs, /add 6 beer – update the fridge\n"
-        "📷 Send a photo of the open fridge and I'll count what's inside")
+        "📷 Send a photo of the open fridge and I'll count what's inside\n"
+        "🎙 Or just say it: send a voice note or plain words, e.g. “is there light?”, “turn off the TV”")
 
 
 def _h(hours):
@@ -233,7 +234,29 @@ class BotBrain:
                 return "text", f"Now tracking {v['name']}: {n}."
             r = api.fridge_adjust(v["id"], -n if cmd == "/took" else n, who)
             return "text", f"{r['name']}: {r['after']} left." if cmd == "/took" else f"{r['name']}: {r['after']} now."
+        if not cmd.startswith("/") and hasattr(api, "assistant_ask"):
+            return self._reply(api.assistant_ask(text, who))     # plain words: "is there light?"
         return "text", "Unknown command.\n\n" + HELP
+
+    def voice(self, audio, who="telegram"):
+        """A voice note: transcribe it and let the assistant answer."""
+        if not hasattr(self.api, "assistant_audio"):
+            return "text", "Voice notes aren't supported here."
+        try:
+            reply = self.api.assistant_audio(audio, who)
+        except Exception as e:
+            return "text", f"Couldn't understand the voice note: {e}"
+        heard = reply.get("heard") or ""
+        return self._reply(reply, f"🎙 “{heard}”\n" if heard else "")
+
+    @staticmethod
+    def _reply(reply, lead=""):
+        text = lead + (reply.get("say") or "")
+        if reply.get("did"):
+            text += "\n✅ " + ", ".join(reply["did"])
+        if reply.get("photo"):
+            return "photo", (reply["photo"], text[:1000])
+        return "text", text
 
     def photo(self, jpeg, who="telegram"):
         """A photo sent to the bot: count the fridge."""
@@ -384,7 +407,8 @@ class TelegramService(ThreadService):
         doc = msg.get("document") or {}
         file_id = photo[-1].get("file_id") if photo else (
             doc.get("file_id") if str(doc.get("mime_type", "")).startswith("image/") else None)
-        if chat_id is None or not (text or file_id):
+        voice_id = (msg.get("voice") or msg.get("audio") or {}).get("file_id")
+        if chat_id is None or not (text or file_id or voice_id):
             return
         name = chat.get("first_name") or chat.get("title") or chat.get("username") or str(chat_id)
         paired = any(c.get("id") == chat_id for c in self.chats())
@@ -401,6 +425,14 @@ class TelegramService(ThreadService):
                 self.log(f"Ignored a message from unpaired chat {name}", "warn")
                 self.client.send_message(chat_id, "This bot is private. Pair it from CYPHER-X: "
                                                   "Server → Services → Telegram bot → Pair a chat.")
+            return
+        if voice_id:
+            kind, payload = self.brain.voice(self.client.download(voice_id), who=f"Telegram: {name}")
+            if kind == "photo":
+                self.client.send_photo(chat_id, payload[0], payload[1])
+            else:
+                self.client.send_message(chat_id, payload)
+            self.log(f"{name}: voice note")
             return
         if file_id:
             self.client.send_message(chat_id, "Counting what's in the photo… 🔎")
