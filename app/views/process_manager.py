@@ -4,6 +4,9 @@ Process Manager — live, Task-Manager-style process list.
 Sampling runs on a background thread every 2 s (CPU % needs two samples, so the
 sampler keeps psutil's process cache warm). The table can be grouped by app,
 sorted by any column, and every row has a context menu.
+
+The table is model-based: a refresh swaps the row list and Qt asks only for the
+rows on screen, instead of building a cell object for every process every tick.
 """
 import os
 import subprocess
@@ -13,12 +16,11 @@ import webbrowser
 from urllib.parse import quote_plus
 
 import psutil
-from PySide6.QtCore import Qt, QObject, QTimer, Signal, QFileInfo
+from PySide6.QtCore import Qt, QObject, QTimer, Signal, QFileInfo, QAbstractTableModel, QModelIndex
 from PySide6.QtGui import QColor, QCursor, QGuiApplication
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTableWidget,
-    QTableWidgetItem, QHeaderView, QFrame, QCheckBox, QMessageBox, QFileIconProvider,
-    QAbstractItemView
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTableView,
+    QHeaderView, QFrame, QCheckBox, QMessageBox, QFileIconProvider, QAbstractItemView
 )
 
 from app.icons import get_icon
@@ -85,16 +87,82 @@ def _fmt_mem(b):
     return f"{mb / 1024:.2f} GB" if mb >= 1024 else f"{mb:.1f} MB"
 
 
-class NumItem(QTableWidgetItem):
-    """Table item that displays text but compares by a numeric value."""
+RED, BLUE, PURPLE = QColor("#f87171"), QColor("#38bdf8"), QColor(167, 139, 250, 40)
+RED_BG, BLUE_BG = QColor(248, 113, 113, 40), QColor(56, 189, 248, 28)
+YELLOW, DIMMED = QColor("#facc15"), QColor("#64748b")
+RIGHT = int(Qt.AlignRight | Qt.AlignVCenter)
+_DISPLAY, _FG, _BG, _ALIGN, _ICON, _USER, _TIP = (
+    Qt.DisplayRole.value, Qt.ForegroundRole.value, Qt.BackgroundRole.value, Qt.TextAlignmentRole.value,
+    Qt.DecorationRole.value, Qt.UserRole.value, Qt.ToolTipRole.value)
+_ROLES = frozenset((_DISPLAY, _FG, _BG, _ALIGN, _ICON, _USER, _TIP))
 
-    def __init__(self, text, value):
-        super().__init__(text)
-        self.value = value
-        self.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-    def __lt__(self, other):
-        return self.value < getattr(other, "value", 0)
+class ProcessModel(QAbstractTableModel):
+    """The visible rows (already filtered, grouped and sorted). Cells are computed on demand."""
+
+    def __init__(self, icon_for, parent=None):
+        super().__init__(parent)
+        self.rows = []
+        self.grouped = False
+        self.icon_for = icon_for
+        self._cells = {}
+
+    def set_rows(self, rows, grouped):
+        self.beginResetModel()
+        self.rows = rows
+        self.grouped = grouped
+        self._cells = {}
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return 0 if parent.isValid() else len(self.rows)
+
+    def columnCount(self, parent=QModelIndex()):
+        return 0 if parent.isValid() else len(COLUMNS)
+
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return COLUMNS[section]
+        return None
+
+    def _row(self, i):
+        """Every role of one row, worked out once per refresh (Qt asks for each cell many times)."""
+        cells = self._cells.get(i)
+        if cells is None:
+            r = self.rows[i]
+            hot, warm = r["cpu"] >= 25, r["cpu"] >= 5
+            cells = self._cells[i] = (
+                (r["name"], f"{r['count']} procs" if self.grouped and r["count"] > 1 else str(r["pid"]),
+                 f"{r['cpu']:.1f}%", _fmt_mem(r["mem"]), str(r["threads"]), r["status"], r["exe"] or "—"),
+                (YELLOW if r["protected"] else None, None, RED if hot else BLUE if warm else None,
+                 None, None, None, DIMMED),
+                (None, None, RED_BG if hot else BLUE_BG if warm else None,
+                 PURPLE if r["mem"] >= 1 << 30 else None, None, None, None),
+            )
+        return cells
+
+    def data(self, index, role=Qt.DisplayRole):
+        # Qt calls this for every visible cell and role on each paint: plain-int roles,
+        # because comparing PySide's enum objects costs more than the lookup itself
+        role = int(role) if not isinstance(role, int) else role
+        if role not in _ROLES:
+            return None
+        i, c = index.row(), index.column()
+        if role == _DISPLAY:
+            return self._row(i)[0][c]
+        if role == _FG:
+            return self._row(i)[1][c]
+        if role == _BG:
+            return self._row(i)[2][c]
+        if role == _ALIGN:
+            return RIGHT if 1 <= c <= 4 else None
+        if role == _ICON:
+            return self.icon_for(self.rows[i]["exe"]) if c == 0 else None
+        if role == _USER:
+            return self.rows[i]
+        if role == _TIP and c == 6:
+            return self.rows[i]["exe"] or None
+        return None
 
 
 class StatChip(QFrame):
@@ -170,7 +238,11 @@ class ProcessManagerView(QWidget):
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search by name, PID or path…")
         self.search.setClearButtonEnabled(True)
-        self.search.textChanged.connect(self._render)
+        self._search_wait = QTimer(self)               # don't redraw the list on every keystroke
+        self._search_wait.setSingleShot(True)
+        self._search_wait.setInterval(180)
+        self._search_wait.timeout.connect(self._render)
+        self.search.textChanged.connect(self._search_wait.start)
         bl.addWidget(self.search, 1)
         self.cb_group = QCheckBox("Group by app")
         self.cb_group.toggled.connect(self._render)
@@ -190,15 +262,16 @@ class ProcessManagerView(QWidget):
         bl.addWidget(self.kill_btn)
         main.addWidget(bar)
 
-        self.table = QTableWidget(0, len(COLUMNS))
+        self.model = ProcessModel(self._icon, self)
+        self.table = QTableView()
+        self.table.setModel(self.model)
         self.table.setProperty("elide_middle", True)
-        self.table.setHorizontalHeaderLabels(COLUMNS)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._context_menu)
-        self.table.itemSelectionChanged.connect(self._sync_buttons)
+        self.table.selectionModel().selectionChanged.connect(self._sync_buttons)
         self.table.doubleClicked.connect(lambda _: self._reveal(self._selected()))
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -283,42 +356,12 @@ class ProcessManagerView(QWidget):
         scroll = self.table.verticalScrollBar().value()
         rows = self._visible_rows()
 
-        self.table.setUpdatesEnabled(False)
-        self.table.blockSignals(True)
-        self.table.setRowCount(len(rows))
-        reselect = -1
-        for i, r in enumerate(rows):
-            name = QTableWidgetItem(self._icon(r["exe"]), r["name"])
-            name.setData(Qt.UserRole, r)
-            if r["protected"]:
-                name.setForeground(QColor("#facc15"))
-            self.table.setItem(i, 0, name)
-            pid_text = f"{r['count']} procs" if grouped and r["count"] > 1 else str(r["pid"])
-            self.table.setItem(i, 1, NumItem(pid_text, r["pid"]))
-            cpu = NumItem(f"{r['cpu']:.1f}%", r["cpu"])
-            if r["cpu"] >= 25:
-                cpu.setForeground(QColor("#f87171"))
-                cpu.setBackground(QColor(248, 113, 113, 40))
-            elif r["cpu"] >= 5:
-                cpu.setForeground(QColor("#38bdf8"))
-                cpu.setBackground(QColor(56, 189, 248, 28))
-            self.table.setItem(i, 2, cpu)
-            mem = NumItem(_fmt_mem(r["mem"]), r["mem"])
-            if r["mem"] >= 1 << 30:
-                mem.setBackground(QColor(167, 139, 250, 40))
-            self.table.setItem(i, 3, mem)
-            self.table.setItem(i, 4, NumItem(str(r["threads"]), r["threads"]))
-            self.table.setItem(i, 5, QTableWidgetItem(r["status"]))
-            loc = QTableWidgetItem(r["exe"] or "—")
-            loc.setForeground(QColor("#64748b"))
-            loc.setToolTip(r["exe"])
-            self.table.setItem(i, 6, loc)
-            if sel_key is not None and sel_key == (r["name"].lower() if grouped else (r["name"], r["pid"])):
-                reselect = i
-        if reselect >= 0:
-            self.table.selectRow(reselect)
-        self.table.blockSignals(False)
-        self.table.setUpdatesEnabled(True)
+        self.model.set_rows(rows, grouped)
+        if sel_key is not None:
+            for i, r in enumerate(rows):
+                if sel_key == (r["name"].lower() if grouped else (r["name"], r["pid"])):
+                    self.table.selectRow(i)
+                    break
         self.table.verticalScrollBar().setValue(scroll)
         self._sync_buttons()
 
@@ -338,8 +381,7 @@ class ProcessManagerView(QWidget):
         rows = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
         if not rows:
             return None
-        item = self.table.item(rows[0].row(), 0)
-        return item.data(Qt.UserRole) if item else None
+        return self.model.data(rows[0], Qt.UserRole)
 
     def _sync_buttons(self):
         r = self._selected()
@@ -347,10 +389,10 @@ class ProcessManagerView(QWidget):
         self.loc_btn.setEnabled(bool(r) and bool(r["exe"]))
 
     def _context_menu(self, pos):
-        item = self.table.itemAt(pos)
-        if not item:
+        index = self.table.indexAt(pos)
+        if not index.isValid():
             return
-        self.table.selectRow(item.row())
+        self.table.selectRow(index.row())
         r = self._selected()
         if not r:
             return

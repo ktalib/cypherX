@@ -1,9 +1,11 @@
 import sqlite3
 import json
 import logging
+import threading
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 from app.config import DB_PATH
 
 logger = logging.getLogger("CyberOps.Database")
@@ -19,12 +21,28 @@ class Database:
 
     def __init__(self, db_path: Path = DB_PATH):
         self.db_path = db_path
+        # One connection for the whole app instead of a new one per call. The web server,
+        # Telegram bot and workers call in from their own threads, so every use holds the lock.
+        self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._lock = threading.RLock()
         self._init_db()
 
-    def _get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
+    @contextmanager
+    def _get_connection(self) -> Iterator[sqlite3.Connection]:
+        """`with db._get_connection() as conn:` — the shared connection, one caller at a time,
+        committed at the end of the block (rolled back if it raised)."""
+        with self._lock:
+            try:
+                yield self._conn
+                self._conn.commit()
+            except BaseException:
+                self._conn.rollback()
+                raise
+
+    def close(self):
+        with self._lock:
+            self._conn.close()
 
     def _init_db(self):
         with self._get_connection() as conn:

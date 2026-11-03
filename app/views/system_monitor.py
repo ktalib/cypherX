@@ -1,4 +1,6 @@
-from PySide6.QtCore import Qt
+import threading
+
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QFrame, QScrollArea, QComboBox, QProgressBar
@@ -13,11 +15,15 @@ from app.services.network_service import NetworkService
 
 class SystemMonitorView(QWidget):
     """Deep real-time Windows system telemetry dashboard with per-core analysis and historical charts."""
+    rate_changed = Signal(int)          # the main window owns the one telemetry timer
+    _top_ready = Signal(list)           # from the scan thread
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.per_core_bars = []
+        self._top_busy = False
         self._setup_ui()
+        self._top_ready.connect(self._show_top_processes)
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -40,6 +46,8 @@ class SystemMonitorView(QWidget):
         self.interval_combo.addItem("Normal (1.5s)", 1500)
         self.interval_combo.addItem("Eco (3.0s)", 3000)
         self.interval_combo.setCurrentIndex(1)
+        self.interval_combo.currentIndexChanged.connect(
+            lambda _: self.rate_changed.emit(int(self.interval_combo.currentData())))
         tb_l.addWidget(self.interval_combo)
 
         main_layout.addWidget(title_box)
@@ -214,28 +222,49 @@ class SystemMonitorView(QWidget):
             tot_kb = (net_rates.get("down_bps", 0.0) + net_rates.get("up_bps", 0.0)) / 1024.0
             self.chart_net.add_point(tot_kb)
 
-        # Uptime and process counts
+        # The rest only matters on screen: the charts above keep their history while hidden
+        if not self.isVisible():
+            return
         self.lbl_uptime.setText(f"System Uptime: {SystemService.format_uptime(uptime_sec)}")
-        self.lbl_procs.setText(f"Active Processes: {SystemService.get_process_count()} PIDs running")
-        if self.isVisible():
-            self._top_tick += 1
-            if self._top_tick % 2 == 1:
-                self._refresh_top_processes()
+        self._top_tick += 1
+        if self._top_tick % 2 == 1:
+            self._refresh_top_processes()
+
+    def set_rate(self, ms):
+        i = self.interval_combo.findData(int(ms))
+        if i >= 0 and i != self.interval_combo.currentIndex():
+            self.interval_combo.blockSignals(True)
+            self.interval_combo.setCurrentIndex(i)
+            self.interval_combo.blockSignals(False)
 
     def _refresh_top_processes(self):
+        """Scan on a worker thread: walking every process can take tens of ms on Windows."""
+        if self._top_busy:
+            return
+        self._top_busy = True
+        threading.Thread(target=self._scan_top_processes, daemon=True).start()
+
+    def _scan_top_processes(self):
         import psutil
         ncpu = psutil.cpu_count() or 1
         procs = []
-        for p in psutil.process_iter(["name", "cpu_percent", "memory_info"]):
-            try:
-                if p.pid == 0:
+        try:
+            for p in psutil.process_iter(["name", "cpu_percent", "memory_info"]):
+                try:
+                    if p.pid == 0:
+                        continue
+                    cpu = (p.info["cpu_percent"] or 0.0) / ncpu
+                    mem = p.info["memory_info"].rss if p.info["memory_info"] else 0
+                    procs.append((cpu, mem, p.info["name"] or "?"))
+                except (psutil.Error, AttributeError):
                     continue
-                cpu = (p.info["cpu_percent"] or 0.0) / ncpu
-                mem = p.info["memory_info"].rss if p.info["memory_info"] else 0
-                procs.append((cpu, mem, p.info["name"] or "?"))
-            except (psutil.Error, AttributeError):
-                continue
-        procs.sort(reverse=True)
+            procs.sort(reverse=True)
+        finally:
+            self._top_busy = False
+        self._top_ready.emit(procs)
+
+    def _show_top_processes(self, procs):
+        self.lbl_procs.setText(f"Active Processes: {len(procs)} PIDs running")
         for (name_l, cpu_l, mem_l), item in zip(self.top_rows, procs + [None] * len(self.top_rows)):
             if item is None:
                 name_l.setText(""); cpu_l.setText(""); mem_l.setText("")

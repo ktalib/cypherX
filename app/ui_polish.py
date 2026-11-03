@@ -7,7 +7,7 @@ App-wide visual polish shared by every page:
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette, QColor, QPainter, QPixmap, QImage, QLinearGradient
 from PySide6.QtWidgets import (
-    QWidget, QTableWidget, QAbstractItemView, QHeaderView, QScrollArea, QFrame
+    QWidget, QTableWidget, QTableView, QAbstractItemView, QHeaderView, QScrollArea, QFrame
 )
 
 
@@ -74,8 +74,8 @@ QTabBar::tab:hover:!selected { background: rgba(255,255,255,0.12); color: #e2e8f
 
 
 def polish_tables(root: QWidget):
-    """Uniform modern look for every QTableWidget below `root`."""
-    for t in root.findChildren(QTableWidget):
+    """Uniform modern look for every table below `root` (QTableWidget and model-based QTableView)."""
+    for t in root.findChildren(QTableView):
         t.verticalHeader().setVisible(False)
         t.verticalHeader().setDefaultSectionSize(36)
         t.setShowGrid(False)

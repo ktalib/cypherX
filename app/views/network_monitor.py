@@ -392,6 +392,8 @@ class NetworkMonitorView(QWidget):
             self._peak_up = max(self._peak_up, up_kb)
             self.lbl_peak.setText(f"PEAK  ↓ {NetworkService.format_speed(self._peak_down * 1024).strip()}"
                                   f"   ↑ {NetworkService.format_speed(self._peak_up * 1024).strip()}")
+        if not self.isVisible():
+            return                      # chart history above is kept; the totals only matter on screen
         totals = NetworkService.get_totals()
         self.lbl_sent.setText(f"SENT SINCE BOOT: {SystemService.format_bytes(totals['bytes_sent'])}")
         self.lbl_recv.setText(f"RECEIVED SINCE BOOT: {SystemService.format_bytes(totals['bytes_recv'])}")
